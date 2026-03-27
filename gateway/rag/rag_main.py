@@ -5,14 +5,56 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from llama_index.core import SimpleDirectoryReader
+from llama_index.core import SimpleDirectoryReader, Settings
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.node_parser import get_leaf_nodes
+from llama_index.core.llms import CustomLLM, LLMMetadata, CompletionResponse, CompletionResponseGen
+from llama_index.core.llms.callbacks import llm_completion_callback
 
 from chunking  import chunk_documents
 from ingestion import build_index
 from indexer   import collection_exists, load_index, persist_storage, _get_qdrant_client
 from retriever import build_query_engine
+
+# ── 自定义 LLM 包装器：把 llm_client.chat() 接入 LlamaIndex ──────────────
+# LlamaIndex 的 RetrieverQueryEngine 需要一个它认识的 LLM 对象
+# 通过继承 CustomLLM，把我们自己的 fallback 链（本地→OpenAI→DeepSeek）接进来
+# 这样 RAG 的 response synthesis 也走同一套模型优先级，而不是默认调 OpenAI
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # 让 gateway.utils 可被导入
+from gateway.utils.llm_client import chat as _llm_chat       # 延迟导入避免循环依赖
+
+
+class ESGLocalLLM(CustomLLM):
+    context_window: int = 4096
+    num_output: int = 1024
+    model_name: str = "esg-local-with-fallback"
+
+    @property
+    def metadata(self) -> LLMMetadata:
+        return LLMMetadata(
+            context_window=self.context_window,
+            num_output=self.num_output,
+            model_name=self.model_name,
+        )
+
+    @llm_completion_callback()
+    def complete(self, prompt: str, **_kwargs) -> CompletionResponse:
+        # LlamaIndex 把检索到的 context + 问题拼成 prompt 字符串传进来
+        # 包装成 messages 格式传给我们的 chat() 函数
+        messages = [{"role": "user", "content": prompt}]
+        reply = _llm_chat(messages, max_tokens=self.num_output)
+        return CompletionResponse(text=reply)
+
+    @llm_completion_callback()
+    def stream_complete(self, prompt: str, **_kwargs) -> CompletionResponseGen:
+        # 不实现流式，直接返回完整结果
+        response = self.complete(prompt)
+        yield CompletionResponse(text=response.text, delta=response.text)
+
+
+# 注册为 LlamaIndex 全局 LLM，所有 query_engine 都会走这套模型
+Settings.llm = ESGLocalLLM()
 
 # ESG 报告存放目录
 DATA_DIR = str(Path(__file__).resolve().parents[2] / "data" / "raw")

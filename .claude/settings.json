@@ -10,7 +10,11 @@
       "Bash(python -m pip uninstall sagemaker -y)",
       "Bash(python -m pip install sagemaker)",
       "Bash(python -c \"import sagemaker; import os; print\\([d for d in os.listdir\\(os.path.dirname\\(sagemaker.__file__\\)\\)]\\)\")",
-      "Bash(python -m pip show rouge-score)"
+      "Bash(python -m pip show rouge-score)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//e/项目夹/ESG Agentic RAG Copilot/**)",
+      "Bash(done)"
     ]
   }
 }
