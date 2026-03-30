@@ -3,8 +3,16 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 from typing import List, Dict, Any
+
+# ── 配置 Matplotlib 中文字体 ─────────────────────────────────
+try:
+    matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial']
+    matplotlib.rcParams['axes.unicode_minus'] = False
+except Exception:
+    pass
 
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -14,7 +22,7 @@ from rouge_score import rouge_scorer
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASE  = "Qwen/Qwen2.5-7B-Instruct"
 DEFAULT_CKPT  = str(PROJECT_ROOT / "model-serving" / "checkpoints")
-DEFAULT_VAL   = str(PROJECT_ROOT / "data" / "processed" / "val.jsonl")
+DEFAULT_VAL   = str(PROJECT_ROOT / "data" / "rag_training_data" / "val.jsonl")
 DEFAULT_OUT   = str(PROJECT_ROOT / "data" / "rag_eval" / "eval_report.json")
 SAMPLE_PRINT  = 10   # 随机打印多少条供人工判断
 

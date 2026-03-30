@@ -17,9 +17,12 @@ def get_client() -> Client:
     global _client
     if _client is None:                              # 尚未初始化，执行一次性建连
         url = os.getenv("SUPABASE_URL")              # 从环境变量读取 Supabase 项目 URL
-        key = os.getenv("SUPABASE_KEY")              # 读取 anon/service_role API Key
+        # 支持多种API Key命名方式（优先级：SUPABASE_API_KEY > SUPABASE_SERVICE_ROLE_KEY > SUPABASE_KEY）
+        key = (os.getenv("SUPABASE_API_KEY") or
+               os.getenv("SUPABASE_SERVICE_ROLE_KEY") or
+               os.getenv("SUPABASE_KEY"))            # 读取 anon/service_role API Key
         if not url or not key:
-            raise RuntimeError("SUPABASE_URL / SUPABASE_KEY not set in .env")
+            raise RuntimeError("SUPABASE_URL and one of [SUPABASE_API_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KEY] must be set in .env")
         _client = create_client(url, key)            # 创建并缓存客户端，后续调用直接复用
     return _client
 

@@ -29,6 +29,9 @@ env/
 .vscode/settings.json
 .idea/
 
+# Claude Code 本地配置
+.claude/
+
 # 日志和临时文件
 *.log
 *.tmp

@@ -16,7 +16,10 @@ class Settings:
 
         # ── Supabase (database) ────────────────────────────────────────
         self.SUPABASE_URL = os.getenv('SUPABASE_URL','')
-        self.SUPABASE_KEY = os.getenv('SUPABASE_KEY','')
+        # 支持多种API Key命名方式（优先级：SUPABASE_API_KEY > SUPABASE_SERVICE_ROLE_KEY > SUPABASE_KEY）
+        self.SUPABASE_KEY = (os.getenv('SUPABASE_API_KEY') or
+                            os.getenv('SUPABASE_SERVICE_ROLE_KEY') or
+                            os.getenv('SUPABASE_KEY') or '')
         self.SUPABASE_PASSWORD = os.getenv('SUPABASE_PASSWORD','')
 
         # ── Email (for notifications) ──────────────────────────────────
