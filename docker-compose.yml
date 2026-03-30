@@ -1,37 +1,60 @@
-version: '3.8'
-
 services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: esg-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - esg-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/6333"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   app:
     build:
       context: .
       dockerfile: gateway/Dockerfile
     container_name: esg-rag-app
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_KEY=${SUPABASE_KEY}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - SUPABASE_API_KEY=${SUPABASE_API_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - QDRANT_URL=http://qdrant:6333
     volumes:
       - ./gateway:/app/gateway
       - ./data:/app/data
-      - ./training:/app/training
+      - ./frontend:/app/frontend
+      - ./configs:/app/configs
+      - ./storage:/app/storage
+    depends_on:
+      qdrant:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     networks:
       - esg-network
     restart: unless-stopped
-    depends_on:
-      - nginx
 
   nginx:
     image: nginx:latest
@@ -44,9 +67,13 @@ services:
     networks:
       - esg-network
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     restart: unless-stopped
 
 networks:
   esg-network:
     driver: bridge
+
+volumes:
+  qdrant_storage:

@@ -12,7 +12,7 @@ from gateway.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # 项目根目录和模型路径配置
-PROJECT_ROOT  = Path(__file__).resolve().parents[3]
+PROJECT_ROOT  = Path(__file__).resolve().parents[2]
 LOCAL_CKPT    = str(PROJECT_ROOT / "model-serving" / "checkpoints")
 LOCAL_BASE    = "Qwen/Qwen2.5-7B-Instruct"
 MAX_LOCAL_FAILURES = 3   # 连续失败超过这个数就切到云端
@@ -23,6 +23,10 @@ _local_tokenizer = None  # 本地分词器实例
 _openai_client   = None  # OpenAI 客户端实例
 _deepseek_client = None  # DeepSeek 客户端实例
 _local_fail_count = 0    # 本地模型连续失败计数器（熔断器）
+
+# 启动时检测本地模型是否可用，不存在直接跳过
+if not Path(LOCAL_CKPT).exists():
+    _local_fail_count = MAX_LOCAL_FAILURES
 
 
 # ── 本地模型 ──────────────────────────────────────────────────────────────

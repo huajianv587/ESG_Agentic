@@ -268,14 +268,16 @@ START
 
 ```python
 def run_router(state: ESGState) -> ESGState:
-    """
-    使用 LLM 分类用户问题
+    """'''
+        使用 LLM 分类用户问题
 
     为什么需要分类?
     - ESG 问题需要结构化的评分 (调用 esg_scorer)
     - 事实性问题只需验证答案的准确性
     - 通用问题可以快速回答
     """
+    '''
+  
 
     # 第一步: 准备提示词
     messages = [
@@ -304,6 +306,8 @@ def run_router(state: ESGState) -> ESGState:
 
     return state  # 返回更新后的状态
 ```
+'''
+
 
 为什么这个设计很重要？
 - 🎯 任务分类是整个流程的"方向盘"，决定后续走哪条路
@@ -312,6 +316,8 @@ def run_router(state: ESGState) -> ESGState:
   * ESG 分析 (慢/贵) → 完整 RAG + 结构化评分
   * 事实查询 (中) → RAG + 验证
   * 通用问题 (快/便宜) → 直接 LLM
+
+'''
 
 【1.3】retriever_agent.py (83 行) - 知识库查询员
 

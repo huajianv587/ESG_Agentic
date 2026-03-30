@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from gateway.scheduler.orchestrator import get_orchestrator
 from gateway.scheduler.matcher import get_matcher
@@ -105,7 +105,6 @@ def demo_event_pipeline():
 
     if not event_ids:
         print("  No events found in this scan. Using example event IDs for demo...")
-        # 演示目的，使用虚拟 ID
         event_ids = ["example_event_1", "example_event_2"]
 
     print("\n[Step 2: Extracting structured information...]")
@@ -245,7 +244,7 @@ The system supports both:
    orchestrator.schedule_periodic_scan_background(interval_minutes=30)
 
 [Documentation]
-   See SCHEDULER_README.md for complete documentation
+   See docs/ for complete documentation
     """)
 
     except Exception as e:

@@ -2,12 +2,12 @@
 # test_scheduler.py — 调度器集成测试脚本
 #
 # 用法：
-#   python test_scheduler.py --full        # 运行完整流程
-#   python test_scheduler.py --scanner     # 仅测试扫描器
-#   python test_scheduler.py --extractor   # 仅测试提取器
-#   python test_scheduler.py --matcher     # 仅测试匹配器
-#   python test_scheduler.py --scorer      # 仅测试评分器
-#   python test_scheduler.py --notifier    # 仅测试推送器
+#   python tests/test_scheduler.py --full        # 运行完整流程
+#   python tests/test_scheduler.py --scanner     # 仅测试扫描器
+#   python tests/test_scheduler.py --extractor   # 仅测试提取器
+#   python tests/test_scheduler.py --matcher     # 仅测试匹配器
+#   python tests/test_scheduler.py --scorer      # 仅测试评分器
+#   python tests/test_scheduler.py --notifier    # 仅测试推送器
 
 import sys
 import json
@@ -15,7 +15,7 @@ import argparse
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from datetime import datetime, timezone
 from gateway.utils.logger import get_logger
@@ -192,36 +192,12 @@ def print_summary(results):
 
 def main():
     parser = argparse.ArgumentParser(description="Test ESG Scheduler Components")
-    parser.add_argument(
-        "--full",
-        action="store_true",
-        help="Run full pipeline",
-    )
-    parser.add_argument(
-        "--scanner",
-        action="store_true",
-        help="Test scanner module only",
-    )
-    parser.add_argument(
-        "--extractor",
-        action="store_true",
-        help="Test extractor module only",
-    )
-    parser.add_argument(
-        "--matcher",
-        action="store_true",
-        help="Test matcher module only",
-    )
-    parser.add_argument(
-        "--scorer",
-        action="store_true",
-        help="Test risk scorer module only",
-    )
-    parser.add_argument(
-        "--notifier",
-        action="store_true",
-        help="Test notifier module only",
-    )
+    parser.add_argument("--full", action="store_true", help="Run full pipeline")
+    parser.add_argument("--scanner", action="store_true", help="Test scanner module only")
+    parser.add_argument("--extractor", action="store_true", help="Test extractor module only")
+    parser.add_argument("--matcher", action="store_true", help="Test matcher module only")
+    parser.add_argument("--scorer", action="store_true", help="Test risk scorer module only")
+    parser.add_argument("--notifier", action="store_true", help="Test notifier module only")
 
     args = parser.parse_args()
 
@@ -239,7 +215,6 @@ def main():
         result = test_full_pipeline()
         results["Full Pipeline"] = result
     else:
-        # 按顺序执行各模块测试
         if args.scanner:
             result = test_scanner()
             results["Scanner"] = result
@@ -268,7 +243,6 @@ def main():
 
     print_summary(results)
 
-    # 全部通过则返回 0，有失败则返回 1
     all_passed = all(v is not None for v in results.values())
     return 0 if all_passed else 1
 

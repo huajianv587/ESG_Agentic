@@ -1,9 +1,9 @@
 import sys
+import threading
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from llama_index.core import SimpleDirectoryReader, Settings
 from llama_index.core.query_engine import RetrieverQueryEngine
@@ -11,18 +11,11 @@ from llama_index.core.node_parser import get_leaf_nodes
 from llama_index.core.llms import CustomLLM, LLMMetadata, CompletionResponse, CompletionResponseGen
 from llama_index.core.llms.callbacks import llm_completion_callback
 
-from chunking  import chunk_documents
-from ingestion import build_index
-from indexer   import collection_exists, load_index, persist_storage, _get_qdrant_client
-from retriever import build_query_engine
-
-# ── 自定义 LLM 包装器：把 llm_client.chat() 接入 LlamaIndex ──────────────
-# LlamaIndex 的 RetrieverQueryEngine 需要一个它认识的 LLM 对象
-# 通过继承 CustomLLM，把我们自己的 fallback 链（本地→OpenAI→DeepSeek）接进来
-# 这样 RAG 的 response synthesis 也走同一套模型优先级，而不是默认调 OpenAI
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # 让 gateway.utils 可被导入
-from gateway.utils.llm_client import chat as _llm_chat       # 延迟导入避免循环依赖
+from gateway.rag.chunking  import chunk_documents
+from gateway.rag.ingestion import build_index
+from gateway.rag.indexer   import collection_exists, load_index, persist_storage, _get_qdrant_client
+from gateway.rag.retriever import build_query_engine
+from gateway.utils.llm_client import chat as _llm_chat
 
 
 class ESGLocalLLM(CustomLLM):
@@ -61,6 +54,9 @@ DATA_DIR = str(Path(__file__).resolve().parents[2] / "data" / "raw")
 
 # 全局单例，避免重复初始化
 _query_engine: RetrieverQueryEngine | None = None
+_index = None
+_storage_context = None
+_init_lock = threading.Lock()
 
 
 def get_query_engine(force_rebuild: bool = False) -> RetrieverQueryEngine:
@@ -73,9 +69,13 @@ def get_query_engine(force_rebuild: bool = False) -> RetrieverQueryEngine:
 
     force_rebuild=True 时强制重新 embed（数据批量更新时使用）。
     """
-    global _query_engine
+    global _query_engine, _index, _storage_context
     if _query_engine is not None and not force_rebuild:
         return _query_engine
+
+    with _init_lock:
+        if _query_engine is not None and not force_rebuild:
+            return _query_engine
 
     client, _ = _get_qdrant_client()
 
@@ -93,9 +93,22 @@ def get_query_engine(force_rebuild: bool = False) -> RetrieverQueryEngine:
         index, storage_context = build_index(all_nodes, leaf_nodes)
         persist_storage(storage_context)
 
+    _index = index
+    _storage_context = storage_context
     _query_engine = build_query_engine(index, storage_context, leaf_nodes)
     print("[RAG] Query engine ready.")
     return _query_engine
+
+
+def get_index_and_storage() -> tuple:
+    """
+    返回 (VectorStoreIndex, StorageContext)，供 event_indexer 增量写入使用。
+    若 index 尚未初始化，会触发 get_query_engine() 完成初始化。
+    """
+    global _index, _storage_context
+    if _index is None or _storage_context is None:
+        get_query_engine()
+    return _index, _storage_context
 
 
 # ---------------------------------------------------------------------------

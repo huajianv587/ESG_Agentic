@@ -7,6 +7,7 @@ COPY requirements.txt .
 # 安装依赖到虚拟环境
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
+    /opt/venv/bin/pip install --no-cache-dir setuptools && \
     /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # ────────────────────────────────────────────────────────────────────
@@ -24,7 +25,8 @@ COPY . .
 # 设置环境变量
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    PYTHONPATH=/app
 
 EXPOSE 8000
 
@@ -32,5 +34,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
-# 运行应用
-CMD ["uvicorn", "main_enhanced:app", "--host", "0.0.0.0", "--port", "8000"]
+WORKDIR /app
+CMD ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]

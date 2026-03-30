@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -12,19 +13,67 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 _client: Client | None = None
 
 
+def _read_env(name: str) -> str:
+    """Read an env var and normalize common formatting issues."""
+    value = os.getenv(name, "")
+    if value is None:
+        return ""
+    value = value.strip().strip("\"'").strip()
+
+    # Some shells / compose setups accidentally inject "NAME=value" as the value.
+    prefix = f"{name}="
+    if value.upper().startswith(prefix.upper()):
+        value = value[len(prefix):].strip().strip("\"'").strip()
+
+    return value
+
+
+def _mask_value(value: str, visible: int = 8) -> str:
+    """Mask sensitive or noisy env values in logs/errors."""
+    if not value:
+        return "<empty>"
+    if len(value) <= visible:
+        return value
+    return f"{value[:visible]}...({len(value)} chars)"
+
+
+def _validate_url(name: str, value: str) -> str:
+    """Validate a URL env var early so callers get actionable errors."""
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise RuntimeError(f"{name} is invalid: {_mask_value(value)}")
+    return value
+
+
 def get_client() -> Client:
     """单例：复用同一个 Supabase 连接。"""
     global _client
     if _client is None:                              # 尚未初始化，执行一次性建连
-        url = os.getenv("SUPABASE_URL")              # 从环境变量读取 Supabase 项目 URL
+        url = _read_env("SUPABASE_URL")              # 从环境变量读取 Supabase 项目 URL
         # 支持多种API Key命名方式（优先级：SUPABASE_API_KEY > SUPABASE_SERVICE_ROLE_KEY > SUPABASE_KEY）
-        key = (os.getenv("SUPABASE_API_KEY") or
-               os.getenv("SUPABASE_SERVICE_ROLE_KEY") or
-               os.getenv("SUPABASE_KEY"))            # 读取 anon/service_role API Key
+        key = (_read_env("SUPABASE_API_KEY") or
+               _read_env("SUPABASE_SERVICE_ROLE_KEY") or
+               _read_env("SUPABASE_KEY"))            # 读取 anon/service_role API Key
         if not url or not key:
             raise RuntimeError("SUPABASE_URL and one of [SUPABASE_API_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KEY] must be set in .env")
-        _client = create_client(url, key)            # 创建并缓存客户端，后续调用直接复用
+        url = _validate_url("SUPABASE_URL", url)
+        try:
+            _client = create_client(url, key)        # 创建并缓存客户端，后续调用直接复用
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to initialize Supabase client "
+                f"(SUPABASE_URL={_mask_value(url)}, key={_mask_value(key)}): {exc}"
+            ) from exc
     return _client
+
+
+# 为了向后兼容，提供 supabase_client 别名（懒加载代理）
+class _ClientProxy:
+    """懒加载代理，首次访问时才初始化连接"""
+    def __getattr__(self, name):
+        return getattr(get_client(), name)
+
+supabase_client = _ClientProxy()
 
 
 # ---------------------------------------------------------------------------
