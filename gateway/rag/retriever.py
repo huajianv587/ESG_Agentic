@@ -2,8 +2,8 @@ from llama_index.core import StorageContext, VectorStoreIndex
 from llama_index.core.retrievers import AutoMergingRetriever, QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.retrievers.bm25 import BM25Retriever
-from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
 
 '''
 BM25召回（关键词） ┐
@@ -47,16 +47,13 @@ def build_query_engine(
         verbose=True,
     )
   
-    # 5. Rerank（对父节点完整文本打分）
-    reranker = FlagEmbeddingReranker(
-        model="BAAI/bge-reranker-base",
-        top_n=rerank_top_n,
-    )
+    # 5. 相似度过滤（CPU 友好，替代神经网络 Reranker）
+    similarity_filter = SimilarityPostprocessor(similarity_cutoff=0.3)
 
     # 6. Query engine
     query_engine = RetrieverQueryEngine(
         retriever=auto_merging_retriever,
-        node_postprocessors=[reranker],
+        node_postprocessors=[similarity_filter],
     )
 
     return query_engine

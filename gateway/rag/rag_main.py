@@ -1,3 +1,4 @@
+import os
 import sys
 import threading
 from pathlib import Path
@@ -10,6 +11,7 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.node_parser import get_leaf_nodes
 from llama_index.core.llms import CustomLLM, LLMMetadata, CompletionResponse, CompletionResponseGen
 from llama_index.core.llms.callbacks import llm_completion_callback
+from llama_index.embeddings.openai import OpenAIEmbedding
 
 from gateway.rag.chunking  import chunk_documents
 from gateway.rag.ingestion import build_index
@@ -49,6 +51,14 @@ class ESGLocalLLM(CustomLLM):
 # 注册为 LlamaIndex 全局 LLM，所有 query_engine 都会走这套模型
 Settings.llm = ESGLocalLLM()
 
+# 显式设置 embedding 模型和 batch_size，避免 LlamaIndex 回退到默认 batch_size=10
+# 未配置时 LlamaIndex 默认 batch_size=10，25 文档 ~775 叶节点需要 78 次 API 调用（约2分钟）
+# 配置 batch_size=100 后只需 ~8 次调用（约8秒）
+Settings.embed_model = OpenAIEmbedding(
+    model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small").split("#")[0].strip(),
+    embed_batch_size=int(os.getenv("EMBEDDING_BATCH_SIZE", "100")),
+)
+
 # ESG 报告存放目录
 DATA_DIR = str(Path(__file__).resolve().parents[2] / "data" / "raw")
 
@@ -74,30 +84,31 @@ def get_query_engine(force_rebuild: bool = False) -> RetrieverQueryEngine:
         return _query_engine
 
     with _init_lock:
+        # double-check inside lock，防止并发重复建索引
         if _query_engine is not None and not force_rebuild:
             return _query_engine
 
-    client, _ = _get_qdrant_client()
+        client, _ = _get_qdrant_client()
 
-    if not force_rebuild and collection_exists(client):
-        # ── 快速恢复路径 ──────────────────────────────────────────
-        print("[RAG] Existing index found — loading from Qdrant + docstore...")
-        index, storage_context = load_index()
-        # BM25 需要 leaf_nodes，从 docstore 重建
-        leaf_nodes = _get_leaf_nodes_from_docstore(storage_context)
-    else:
-        # ── 首次建库 / 强制重建路径 ───────────────────────────────
-        print(f"[RAG] Building index from documents in {DATA_DIR} ...")
-        documents = _load_documents()
-        all_nodes, leaf_nodes = chunk_documents(documents)
-        index, storage_context = build_index(all_nodes, leaf_nodes)
-        persist_storage(storage_context)
+        if not force_rebuild and collection_exists(client):
+            # ── 快速恢复路径 ──────────────────────────────────────────
+            print("[RAG] Existing index found — loading from Qdrant + docstore...")
+            index, storage_context = load_index()
+            # BM25 需要 leaf_nodes，从 docstore 重建
+            leaf_nodes = _get_leaf_nodes_from_docstore(storage_context)
+        else:
+            # ── 首次建库 / 强制重建路径 ───────────────────────────────
+            print(f"[RAG] Building index from documents in {DATA_DIR} ...")
+            documents = _load_documents()
+            all_nodes, leaf_nodes = chunk_documents(documents)
+            index, storage_context = build_index(all_nodes, leaf_nodes)
+            persist_storage(storage_context)
 
-    _index = index
-    _storage_context = storage_context
-    _query_engine = build_query_engine(index, storage_context, leaf_nodes)
-    print("[RAG] Query engine ready.")
-    return _query_engine
+        _index = index
+        _storage_context = storage_context
+        _query_engine = build_query_engine(index, storage_context, leaf_nodes)
+        print("[RAG] Query engine ready.")
+        return _query_engine
 
 
 def get_index_and_storage() -> tuple:
