@@ -23,12 +23,24 @@
         {
           "name": "PORT",
           "value": "8000"
+        },
+        {
+          "name": "QDRANT_URL",
+          "value": "http://localhost:6333"
+        },
+        {
+          "name": "CORS_ORIGINS",
+          "value": "https://your-frontend-domain.com"
         }
       ],
       "secrets": [
         {
           "name": "OPENAI_API_KEY",
           "valueFrom": "arn:aws:secretsmanager:YOUR_REGION:YOUR_AWS_ACCOUNT_ID:secret:esg-rag-openai-key:OPENAI_API_KEY::"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:YOUR_REGION:YOUR_AWS_ACCOUNT_ID:secret:esg-rag-anthropic-key:ANTHROPIC_API_KEY::"
         },
         {
           "name": "DEEPSEEK_API_KEY",

@@ -77,11 +77,14 @@ logger = get_logger(__name__)
 app = FastAPI(title="ESG Agentic RAG Copilot")
 
 # ── CORS 配置 ──────────────────────────────────────────────────────────────
+import os as _os
+_cors_origins = _os.getenv("CORS_ORIGINS", "*")
+_allowed_origins = [o.strip() for o in _cors_origins.split(",")] if _cors_origins != "*" else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_allowed_origins,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -560,6 +563,8 @@ def dashboard_overview():
 @app.post("/session")
 def new_session(session_id: str, user_id: str = None):
     """新建会话"""
+    if create_session is None:
+        raise HTTPException(status_code=503, detail="Database module not available")
     create_session(session_id=session_id, user_id=user_id)
     return {"session_id": session_id, "created": True}
 
@@ -574,7 +579,7 @@ def query(req: QueryRequest):
     if engine is None:
         raise HTTPException(status_code=503, detail="RAG engine not ready.")
 
-    history = get_history(req.session_id, limit=10)
+    history = get_history(req.session_id, limit=10) if get_history else []
     context_prefix = ""
     if history:
         lines = [f"{m['role'].upper()}: {m['content']}" for m in history]
@@ -584,8 +589,9 @@ def query(req: QueryRequest):
     response = engine.query(full_question)
     answer = str(response)
 
-    save_message(req.session_id, "user", req.question)
-    save_message(req.session_id, "assistant", answer)
+    if save_message:
+        save_message(req.session_id, "user", req.question)
+        save_message(req.session_id, "assistant", answer)
 
     return QueryResponse(
         session_id=req.session_id,
@@ -597,6 +603,8 @@ def query(req: QueryRequest):
 @app.get("/history/{session_id}")
 def history(session_id: str, limit: int = 20):
     """获取会话历史"""
+    if get_history is None:
+        raise HTTPException(status_code=503, detail="Database module not available")
     return {"session_id": session_id, "messages": get_history(session_id, limit=limit)}
 
 
@@ -609,7 +617,7 @@ def analyze_esg(question: str, session_id: str = ""):
     try:
         result = run_agent(question, session_id=session_id)
 
-        if session_id:
+        if session_id and save_message:
             save_message(session_id, "user", question)
             save_message(session_id, "assistant", result.get("final_answer", ""))
 
@@ -642,6 +650,8 @@ def get_esg_score(req: ESGScoreRequest):
         logger.info(f"[ESG Score] Computing score for {req.company}")
 
         # 拉取公司数据
+        if not data_source_manager:
+            raise HTTPException(status_code=503, detail="Data Source Manager not ready")
         company_data = data_source_manager.fetch_company_data(
             req.company,
             ticker=req.ticker
@@ -656,7 +666,7 @@ def get_esg_score(req: ESGScoreRequest):
 
         # 生成可视化
         visualizations = {}
-        if req.include_visualization:
+        if req.include_visualization and esg_visualizer:
             visualizations = esg_visualizer.generate_report_visual(esg_report)
 
         return {
@@ -687,7 +697,7 @@ def generate_report(req: ReportGenerateRequest, background_tasks: BackgroundTask
             # 异步生成
             report_id = f"report_{datetime.now().timestamp()}"
 
-            async def generate_async():
+            def generate_sync():
                 try:
                     if req.report_type == "daily":
                         report = report_generator.generate_daily_report(req.companies)
@@ -699,12 +709,13 @@ def generate_report(req: ReportGenerateRequest, background_tasks: BackgroundTask
                         return
 
                     # 保存报告
-                    report_scheduler._save_report(report)
+                    if report_scheduler:
+                        report_scheduler._save_report(report)
                     logger.info(f"[Reports] Report {report_id} generated successfully")
                 except Exception as e:
-                    logger.error(f"[Reports] Error generating report: {e}")
+                    logger.error(f"[Reports] Error generating report: {e}", exc_info=True)
 
-            background_tasks.add_task(generate_async)
+            background_tasks.add_task(generate_sync)
 
             return {
                 "report_id": report_id,
@@ -724,7 +735,7 @@ def generate_report(req: ReportGenerateRequest, background_tasks: BackgroundTask
             else:
                 raise HTTPException(status_code=400, detail="Invalid report type")
 
-            report_id = report_scheduler._save_report(report)
+            report_id = report_scheduler._save_report(report) if report_scheduler else f"report_{datetime.now().timestamp()}"
 
             return {
                 "report_id": report_id,
@@ -820,7 +831,7 @@ def sync_data_sources(req: DataSyncRequest, background_tasks: BackgroundTasks):
     try:
         job_id = f"sync_{datetime.now().timestamp()}"
 
-        async def sync_async():
+        def sync_task():
             for company in req.companies:
                 try:
                     data_source_manager.sync_company_snapshot(
@@ -830,7 +841,7 @@ def sync_data_sources(req: DataSyncRequest, background_tasks: BackgroundTasks):
                 except Exception as e:
                     logger.warning(f"Sync error for {company}: {e}")
 
-        background_tasks.add_task(sync_async)
+        background_tasks.add_task(sync_task)
 
         return {
             "job_id": job_id,
@@ -1031,8 +1042,17 @@ def unsubscribe(subscription_id: str):
 @app.post("/scheduler/scan")
 def trigger_scan(background_tasks: BackgroundTasks):
     """触发ESG扫描"""
+    if not get_orchestrator:
+        raise HTTPException(status_code=503, detail="Scheduler module not available")
     orchestrator = get_orchestrator()
-    background_tasks.add_task(orchestrator.run_full_pipeline)
+
+    def _run_pipeline():
+        try:
+            orchestrator.run_full_pipeline()
+        except Exception as e:
+            logger.error(f"[Scheduler] Pipeline failed: {e}", exc_info=True)
+
+    background_tasks.add_task(_run_pipeline)
 
     return {
         "status": "scanning",
@@ -1044,6 +1064,8 @@ def trigger_scan(background_tasks: BackgroundTasks):
 @app.get("/scheduler/scan/status")
 def get_scan_status():
     """获取扫描状态"""
+    if not get_orchestrator:
+        raise HTTPException(status_code=503, detail="Scheduler module not available")
     orchestrator = get_orchestrator()
     status = orchestrator.get_scan_status()
 

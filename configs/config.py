@@ -8,6 +8,7 @@ class Settings:
     def __init__(self):
         # ── LLM APIs ───────────────────────────────────────────────────
         self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY','')
+        self.ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY','')
         self.DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY','')
 
         # ── AWS (for data sources) ─────────────────────────────────────
