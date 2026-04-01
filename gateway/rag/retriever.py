@@ -47,13 +47,9 @@ def build_query_engine(
         verbose=True,
     )
   
-    # 5. 相似度过滤（CPU 友好，替代神经网络 Reranker）
-    similarity_filter = SimilarityPostprocessor(similarity_cutoff=0.3)
-
-    # 6. Query engine
+    # 5. Query engine（不设相似度过滤，128-token 小 chunk 的相似度分数普遍偏低）
     query_engine = RetrieverQueryEngine(
         retriever=auto_merging_retriever,
-        node_postprocessors=[similarity_filter],
     )
 
     return query_engine

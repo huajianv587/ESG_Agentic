@@ -90,14 +90,26 @@ def get_query_engine(force_rebuild: bool = False) -> RetrieverQueryEngine:
 
         client, _ = _get_qdrant_client()
 
-        if not force_rebuild and collection_exists(client):
+        need_rebuild = force_rebuild or not collection_exists(client)
+
+        if not need_rebuild:
             # ── 快速恢复路径 ──────────────────────────────────────────
-            print("[RAG] Existing index found — loading from Qdrant + docstore...")
-            index, storage_context = load_index()
-            # BM25 需要 leaf_nodes，从 docstore 重建
-            leaf_nodes = _get_leaf_nodes_from_docstore(storage_context)
-        else:
+            try:
+                print("[RAG] Existing index found — loading from Qdrant + docstore...")
+                index, storage_context = load_index()
+                leaf_nodes = _get_leaf_nodes_from_docstore(storage_context)
+            except Exception as e:
+                print(f"[RAG] Fast-load failed ({e}), falling back to rebuild...")
+                need_rebuild = True
+
+        if need_rebuild:
             # ── 首次建库 / 强制重建路径 ───────────────────────────────
+            # 先删除旧 collection，防止重启时反复追加向量导致数据膨胀
+            try:
+                client.delete_collection("esg_docs")
+                print("[RAG] Deleted stale Qdrant collection before rebuild.")
+            except Exception:
+                pass
             print(f"[RAG] Building index from documents in {DATA_DIR} ...")
             documents = _load_documents()
             all_nodes, leaf_nodes = chunk_documents(documents)
@@ -141,6 +153,12 @@ def _load_documents():
 
     if not docs:
         raise ValueError(f"No documents found in {DATA_DIR}")
+
+    # 清洗文本：移除空字节和非法控制字符，防止 OpenAI API 400 JSON 解析错误
+    for doc in docs:
+        cleaned = doc.text.replace('\x00', ' ')
+        cleaned = ''.join(ch for ch in cleaned if ch >= ' ' or ch in '\n\r\t')
+        doc.set_content(cleaned)
 
     print(f"[RAG] Loaded {len(docs)} document(s) from {DATA_DIR}")
     return docs

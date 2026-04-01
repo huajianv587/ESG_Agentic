@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 
 # 项目根目录和模型路径配置
 PROJECT_ROOT  = Path(__file__).resolve().parents[2]
-LOCAL_CKPT    = str(PROJECT_ROOT / "model-serving" / "checkpoints")
+LOCAL_CKPT    = str(PROJECT_ROOT / "model-serving" / "checkpoint")
 LOCAL_BASE    = "Qwen/Qwen2.5-7B-Instruct"
 MAX_LOCAL_FAILURES = 3   # 连续失败超过这个数就切到云端
 
