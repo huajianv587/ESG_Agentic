@@ -32,6 +32,9 @@ class Settings:
         self.OPENAI_API_KEY = _first_env("OPENAI_API_KEY")
         self.ANTHROPIC_API_KEY = _first_env("ANTHROPIC_API_KEY")
         self.DEEPSEEK_API_KEY = _first_env("DEEPSEEK_API_KEY")
+        self.REMOTE_LLM_URL = _first_env("REMOTE_LLM_URL")
+        self.REMOTE_LLM_API_KEY = _first_env("REMOTE_LLM_API_KEY")
+        self.REMOTE_LLM_TIMEOUT = _env_int("REMOTE_LLM_TIMEOUT", default=180)
 
         # ── AWS (for data sources) ─────────────────────────────────────
         self.AWS_ACCESS_KEY_ID = _first_env("AWS_ACCESS_KEY_ID")

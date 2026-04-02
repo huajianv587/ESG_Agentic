@@ -10,3 +10,58 @@ def test_local_backend_supported_skips_cpu_only_hosts(monkeypatch):
 
     assert llm_client._local_backend_supported() is False
     assert llm_client._local_fail_count == llm_client.MAX_LOCAL_FAILURES
+
+
+def test_chat_remote_uses_configured_service(monkeypatch):
+    captured = {}
+
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"answer": "remote-ok"}
+
+    def fake_post(url, json, headers, timeout):
+        captured["url"] = url
+        captured["json"] = json
+        captured["headers"] = headers
+        captured["timeout"] = timeout
+        return DummyResponse()
+
+    monkeypatch.setattr(llm_client.settings, "REMOTE_LLM_URL", "http://127.0.0.1:8010")
+    monkeypatch.setattr(llm_client.settings, "REMOTE_LLM_API_KEY", "secret-token")
+    monkeypatch.setattr(llm_client.settings, "REMOTE_LLM_TIMEOUT", 42)
+    monkeypatch.setattr(llm_client.requests, "post", fake_post)
+
+    result = llm_client._chat_remote(
+        [{"role": "user", "content": "Summarize Singtel governance priorities."}],
+        max_tokens=256,
+        temperature=0.1,
+    )
+
+    assert result == "remote-ok"
+    assert captured["url"] == "http://127.0.0.1:8010/chat"
+    assert captured["json"]["max_tokens"] == 256
+    assert captured["headers"]["Authorization"] == "Bearer secret-token"
+    assert captured["timeout"] == 42
+
+
+def test_chat_prefers_remote_service_before_cloud_fallback(monkeypatch):
+    monkeypatch.setattr(llm_client, "_local_fail_count", llm_client.MAX_LOCAL_FAILURES)
+    monkeypatch.setattr(llm_client, "_remote_fail_count", 0)
+    monkeypatch.setattr(llm_client.settings, "REMOTE_LLM_URL", "http://127.0.0.1:8010")
+    monkeypatch.setattr(llm_client, "_chat_remote", lambda messages, max_tokens, temperature: "remote-answer")
+    monkeypatch.setattr(
+        llm_client,
+        "_chat_openai",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("OpenAI fallback should not run")),
+    )
+
+    result = llm_client.chat(
+        [{"role": "user", "content": "Analyze DBS climate disclosures."}],
+        temperature=0.2,
+        max_tokens=128,
+    )
+
+    assert result == "remote-answer"
