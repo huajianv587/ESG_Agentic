@@ -21,6 +21,7 @@ services:
       context: .
       dockerfile: gateway/Dockerfile
     container_name: esg-rag-app
+    gpus: all
     env_file:
       - .env
     ports:
@@ -39,6 +40,8 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - QDRANT_URL=http://qdrant:6333
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
       - ./gateway:/app/gateway
       - ./data:/app/data
