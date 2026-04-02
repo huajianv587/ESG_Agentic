@@ -26,7 +26,9 @@ COPY . .
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PORT=8000 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    HF_HOME=/root/.cache/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/root/.cache/huggingface
 
 EXPOSE 8000
 

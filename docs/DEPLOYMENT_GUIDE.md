@@ -281,17 +281,17 @@ print('✓ 数据库连接成功')
 ```bash
 # 方法A: 直接运行（开发环境）
 cd gateway
-python main_enhanced.py
+python main.py
 # 应看到输出：
 # INFO:     Uvicorn running on http://0.0.0.0:8000
 
 # 方法B: 使用uvicorn（推荐）
 cd gateway
-uvicorn main_enhanced:app --host 0.0.0.0 --port 8000 --reload
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # 方法C: 在后台运行（生产环境）
 cd gateway
-nohup python -m uvicorn main_enhanced:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
+nohup python -m uvicorn main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
 ```
 
 ### 步骤3: 验证服务启动
@@ -698,4 +698,3 @@ def generate_report_async(report_type, companies):
 - ✓ 用户个性化订阅
 
 开始使用: `curl http://localhost:8000/health`
-

@@ -24,9 +24,33 @@ _openai_client   = None  # OpenAI 客户端实例
 _deepseek_client = None  # DeepSeek 客户端实例
 _local_fail_count = 0    # 本地模型连续失败计数器（熔断器）
 
-# 启动时检测本地模型是否可用，不存在直接跳过
-if not Path(LOCAL_CKPT).exists():
+def _disable_local_backend(reason: str) -> None:
+    """熔断本地模型后端，避免后续请求重复卡在不可用路径。"""
+    global _local_fail_count
+    if _local_fail_count < MAX_LOCAL_FAILURES:
+        logger.warning(f"[LLM] {reason}")
     _local_fail_count = MAX_LOCAL_FAILURES
+
+
+def _local_backend_supported() -> bool:
+    """检查当前环境是否适合加载本地 7B LoRA 模型。"""
+    ckpt = Path(LOCAL_CKPT)
+    if not ckpt.exists():
+        _disable_local_backend(f"Local checkpoint not found: {LOCAL_CKPT}")
+        return False
+
+    if not torch.cuda.is_available():
+        _disable_local_backend(
+            "CUDA unavailable; skipping local Qwen2.5-7B backend on CPU. "
+            "Configure OPENAI_API_KEY or DEEPSEEK_API_KEY for CPU deployments, or deploy with GPU."
+        )
+        return False
+
+    return True
+
+
+# 启动时检测本地模型是否可用，不适合时直接跳过
+_local_backend_supported()
 
 
 # ── 本地模型 ──────────────────────────────────────────────────────────────
@@ -45,16 +69,18 @@ def _load_local_model():
     if _local_model is not None:
         return _local_model, _local_tokenizer
 
-    ckpt = Path(LOCAL_CKPT)
-    if not ckpt.exists():
-        raise FileNotFoundError(f"Local checkpoint not found: {LOCAL_CKPT}")
+    if not _local_backend_supported():
+        raise RuntimeError(
+            "Local Qwen2.5-7B backend is unavailable in this environment."
+        )
 
+    ckpt = Path(LOCAL_CKPT)
     logger.info(f"[LLM] Loading local model from {LOCAL_CKPT} ...")
     # 加载分词器
     tokenizer = AutoTokenizer.from_pretrained(LOCAL_BASE, trust_remote_code=True)
     tokenizer.pad_token = tokenizer.eos_token
 
-    # 加载基座模型（float16 精度，自动分配设备）
+    # 加载基座模型（GPU 环境下使用 float16，并自动分配设备）
     model = AutoModelForCausalLM.from_pretrained(
         LOCAL_BASE,
         torch_dtype=torch.float16,

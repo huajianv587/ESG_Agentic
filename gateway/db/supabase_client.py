@@ -134,11 +134,20 @@ def delete_session(session_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 def create_session(session_id: str, user_id: str | None = None) -> None:
-    get_client().table("sessions").insert({
+    payload = {
         "session_id": session_id,              # 前端生成的唯一会话 ID（如 UUID）
         "user_id": user_id,                    # 可选，关联到具体用户；匿名时为 None
         "created_at": datetime.now(timezone.utc).isoformat(),
-    }).execute()
+    }
+
+    try:
+        get_client().table("sessions").insert(payload).execute()
+    except Exception as exc:
+        # 让创建会话接口具备幂等性，页面刷新或重复初始化时不因为唯一键冲突失败。
+        error_text = str(exc).lower()
+        if "duplicate" in error_text or "unique" in error_text or "already exists" in error_text:
+            return
+        raise
 
 
 def list_sessions(user_id: str) -> list[str]:

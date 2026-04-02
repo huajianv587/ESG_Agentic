@@ -28,6 +28,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8000
+      - HF_HOME=/root/.cache/huggingface
+      - SENTENCE_TRANSFORMERS_HOME=/root/.cache/huggingface
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
@@ -43,6 +45,7 @@ services:
       - ./frontend:/app/frontend
       - ./configs:/app/configs
       - ./storage:/app/storage
+      - hf_cache:/root/.cache/huggingface
     depends_on:
       qdrant:
         condition: service_healthy
@@ -77,3 +80,4 @@ networks:
 
 volumes:
   qdrant_storage:
+  hf_cache:

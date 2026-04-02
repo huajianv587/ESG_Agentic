@@ -1,5 +1,7 @@
 import sys
 import asyncio
+import json as _json
+from contextlib import asynccontextmanager
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
@@ -7,11 +9,11 @@ from datetime import datetime, timedelta, timezone
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Body
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 
 # RAG和基础模块（可选，缺依赖时降级）
@@ -22,10 +24,10 @@ except Exception as _e:
     get_query_engine = None
 
 try:
-    from db.supabase_client import save_message, get_history, create_session
+    from db.supabase_client import save_message, get_history, create_session, get_client
 except Exception as _e:
     import logging; logging.getLogger(__name__).warning(f"Supabase模块加载失败: {_e}")
-    save_message = get_history = create_session = None
+    save_message = get_history = create_session = get_client = None
 
 try:
     from scheduler.orchestrator import get_orchestrator
@@ -78,8 +80,27 @@ app = FastAPI(title="ESG Agentic RAG Copilot")
 
 # ── CORS 配置 ──────────────────────────────────────────────────────────────
 import os as _os
+
+
+def _parse_cors_origins(raw_value: str) -> List[str]:
+    if not raw_value or raw_value == "*":
+        return ["*"]
+
+    try:
+        parsed = _json.loads(raw_value)
+        if isinstance(parsed, list):
+            origins = [str(item).strip() for item in parsed if str(item).strip()]
+            if origins:
+                return origins
+    except Exception:
+        pass
+
+    origins = [item.strip().strip("\"'") for item in raw_value.split(",") if item.strip()]
+    return origins or ["*"]
+
+
 _cors_origins = _os.getenv("CORS_ORIGINS", "*")
-_allowed_origins = [o.strip() for o in _cors_origins.split(",")] if _cors_origins != "*" else ["*"]
+_allowed_origins = _parse_cors_origins(_cors_origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
@@ -105,8 +126,108 @@ esg_visualizer = None
 data_source_manager = None
 report_generator = None
 report_scheduler = None
+report_jobs: Dict[str, Dict[str, Any]] = {}
+sync_jobs: Dict[str, Dict[str, Any]] = {}
 
-@app.on_event("startup")
+
+def _ensure_session(session_id: str, user_id: Optional[str] = None) -> None:
+    if session_id and create_session is not None:
+        create_session(session_id=session_id, user_id=user_id)
+
+
+def _serialize_model(model: Any) -> Any:
+    if model is None:
+        return None
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    if hasattr(model, "dict"):
+        return model.dict()
+    return model
+
+
+def _flatten_report_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    payload = row.get("data") or {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    report_id = row.get("id") or payload.get("report_id")
+    flattened = dict(payload)
+    flattened["report_id"] = report_id
+    flattened.setdefault("id", report_id)
+    flattened.setdefault("report_type", row.get("report_type"))
+    flattened.setdefault("title", row.get("title"))
+    flattened.setdefault("period_start", row.get("period_start"))
+    flattened.setdefault("period_end", row.get("period_end"))
+    flattened.setdefault("generated_at", row.get("generated_at"))
+    return flattened
+
+
+def _fetch_report_row(report_id: str) -> Optional[Dict[str, Any]]:
+    if get_client is None:
+        return None
+
+    response = (
+        get_client()
+        .table("esg_reports")
+        .select("id, report_type, title, period_start, period_end, data, generated_at")
+        .eq("id", report_id)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def _fetch_latest_report_row(report_type: str, company: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    if get_client is None:
+        return None
+
+    response = (
+        get_client()
+        .table("esg_reports")
+        .select("id, report_type, title, period_start, period_end, data, generated_at")
+        .eq("report_type", report_type)
+        .order("generated_at", desc=True)
+        .limit(20)
+        .execute()
+    )
+
+    for row in response.data or []:
+        payload = row.get("data") or {}
+        analyses = payload.get("company_analyses") or []
+        if not company:
+            return row
+        if any(str(item.get("company_name", "")).lower() == company.lower() for item in analyses):
+            return row
+
+    return None
+
+
+def _generate_report_by_type(report_type: str, companies: List[str]):
+    if report_generator is None:
+        raise HTTPException(status_code=503, detail="Report Generator not ready")
+
+    if report_type == "daily":
+        return report_generator.generate_daily_report(companies)
+    if report_type == "weekly":
+        return report_generator.generate_weekly_report(companies)
+    if report_type == "monthly":
+        return report_generator.generate_monthly_report(companies)
+    raise HTTPException(status_code=400, detail="Invalid report type")
+
+
+def _store_report_job(job_id: str, report: Any, persisted_id: Optional[str] = None) -> Dict[str, Any]:
+    payload = _serialize_model(report) or {}
+    payload["report_id"] = persisted_id or job_id
+    payload.setdefault("id", persisted_id or job_id)
+
+    report_jobs[job_id] = {
+        "status": "completed",
+        "report_id": persisted_id or job_id,
+        "report": payload,
+        "generated_at": payload.get("generated_at"),
+    }
+    return payload
+
 async def startup():
     """应用启动时初始化所有模块"""
     global esg_scorer, esg_visualizer, data_source_manager, report_generator, report_scheduler
@@ -173,6 +294,15 @@ async def startup():
     logger.info("[Startup] All modules initialized successfully")
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await startup()
+    yield
+
+
+app.router.lifespan_context = lifespan
+
+
 # ── 请求/响应模型 ───────────────────────────────────────────────────────────
 
 class QueryRequest(BaseModel):
@@ -186,6 +316,11 @@ class QueryResponse(BaseModel):
     answer: str
 
 
+class AnalyzeRequest(BaseModel):
+    session_id: str = ""
+    question: str
+
+
 class ESGScoreRequest(BaseModel):
     company: str
     ticker: Optional[str] = None
@@ -195,9 +330,11 @@ class ESGScoreRequest(BaseModel):
 
 
 class ReportGenerateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     report_type: str  # "daily", "weekly", "monthly"
     companies: List[str]
-    async_: bool = True
+    async_: bool = Field(default=True, alias="async")
     include_peer_comparison: bool = False
 
 
@@ -222,6 +359,11 @@ class UserReportSubscribeRequest(BaseModel):
     alert_threshold: Optional[Dict[str, Any]] = None
     push_channels: List[str]
     frequency: str = "daily"
+
+
+class PushRuleTestRequest(BaseModel):
+    test_user_id: str
+    mock_report: Dict[str, Any]
 
 
 # ── 健康检查 ───────────────────────────────────────────────────────────────
@@ -579,6 +721,7 @@ def query(req: QueryRequest):
     if engine is None:
         raise HTTPException(status_code=503, detail="RAG engine not ready.")
 
+    _ensure_session(req.session_id)
     history = get_history(req.session_id, limit=10) if get_history else []
     context_prefix = ""
     if history:
@@ -609,20 +752,33 @@ def history(session_id: str, limit: int = 20):
 
 
 @app.post("/agent/analyze")
-def analyze_esg(question: str, session_id: str = ""):
+def analyze_esg(
+    payload: Optional[AnalyzeRequest] = Body(default=None),
+    question: Optional[str] = Query(default=None),
+    session_id: str = Query(default=""),
+):
     """
     Agent工作流分析 - 被动查询
     通过 LangGraph 工作流进行结构化分析
     """
-    try:
-        result = run_agent(question, session_id=session_id)
+    actual_question = payload.question if payload else question
+    actual_session_id = payload.session_id if payload and payload.session_id else session_id
 
-        if session_id and save_message:
-            save_message(session_id, "user", question)
-            save_message(session_id, "assistant", result.get("final_answer", ""))
+    if not actual_question:
+        raise HTTPException(status_code=422, detail="question is required")
+    if run_agent is None:
+        raise HTTPException(status_code=503, detail="Agent module not available")
+
+    try:
+        result = run_agent(actual_question, session_id=actual_session_id)
+
+        if actual_session_id and save_message:
+            _ensure_session(actual_session_id)
+            save_message(actual_session_id, "user", actual_question)
+            save_message(actual_session_id, "assistant", result.get("final_answer", ""))
 
         return {
-            "question": question,
+            "question": actual_question,
             "answer": result.get("final_answer"),
             "esg_scores": result.get("esg_scores", {}),
             "confidence": result.get("confidence", 0),
@@ -675,6 +831,8 @@ def get_esg_score(req: ESGScoreRequest):
             "success": True,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"ESG Score error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -692,27 +850,35 @@ def generate_report(req: ReportGenerateRequest, background_tasks: BackgroundTask
 
     try:
         logger.info(f"[Reports] Generating {req.report_type} report")
+        if req.report_type not in {"daily", "weekly", "monthly"}:
+            raise HTTPException(status_code=400, detail="Invalid report type")
 
         if req.async_:
             # 异步生成
             report_id = f"report_{datetime.now().timestamp()}"
+            report_jobs[report_id] = {
+                "status": "generating",
+                "report_type": req.report_type,
+                "companies_count": len(req.companies),
+                "generated_at": None,
+            }
 
             def generate_sync():
                 try:
-                    if req.report_type == "daily":
-                        report = report_generator.generate_daily_report(req.companies)
-                    elif req.report_type == "weekly":
-                        report = report_generator.generate_weekly_report(req.companies)
-                    elif req.report_type == "monthly":
-                        report = report_generator.generate_monthly_report(req.companies)
-                    else:
-                        return
+                    report = _generate_report_by_type(req.report_type, req.companies)
 
                     # 保存报告
-                    if report_scheduler:
-                        report_scheduler._save_report(report)
+                    persisted_id = report_scheduler._save_report(report) if report_scheduler else report_id
+                    _store_report_job(report_id, report, persisted_id=persisted_id)
                     logger.info(f"[Reports] Report {report_id} generated successfully")
                 except Exception as e:
+                    report_jobs[report_id] = {
+                        "status": "failed",
+                        "report_type": req.report_type,
+                        "companies_count": len(req.companies),
+                        "error": str(e),
+                        "generated_at": None,
+                    }
                     logger.error(f"[Reports] Error generating report: {e}", exc_info=True)
 
             background_tasks.add_task(generate_sync)
@@ -726,24 +892,20 @@ def generate_report(req: ReportGenerateRequest, background_tasks: BackgroundTask
             }
         else:
             # 同步生成
-            if req.report_type == "daily":
-                report = report_generator.generate_daily_report(req.companies)
-            elif req.report_type == "weekly":
-                report = report_generator.generate_weekly_report(req.companies)
-            elif req.report_type == "monthly":
-                report = report_generator.generate_monthly_report(req.companies)
-            else:
-                raise HTTPException(status_code=400, detail="Invalid report type")
+            report = _generate_report_by_type(req.report_type, req.companies)
 
             report_id = report_scheduler._save_report(report) if report_scheduler else f"report_{datetime.now().timestamp()}"
+            payload = _store_report_job(report_id, report, persisted_id=report_id)
 
             return {
                 "report_id": report_id,
                 "status": "completed",
                 "report_type": req.report_type,
-                "report": report.dict(),
+                "report": payload,
             }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Report generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -754,14 +916,38 @@ def get_report(report_id: str, report_type: Optional[str] = None):
     """获取报告内容"""
     try:
         if report_id == "latest":
-            logger.info("[Reports] No persisted latest report available, returning 204")
-            return Response(status_code=204)
+            row = _fetch_latest_report_row(report_type or "", None)
+            if row is None:
+                return Response(status_code=204)
 
-        return {
-            "report_id": report_id,
-            "status": "found",
-            "message": "使用report_id从数据库查询报告"
-        }
+            payload = _flatten_report_row(row)
+            payload["status"] = "completed"
+            return payload
+
+        job = report_jobs.get(report_id)
+        if job:
+            if job.get("status") != "completed":
+                return {
+                    "report_id": report_id,
+                    "status": job.get("status"),
+                    "report_type": job.get("report_type"),
+                    "error": job.get("error"),
+                }
+
+            payload = dict(job.get("report") or {})
+            payload["status"] = "completed"
+            payload["report_id"] = payload.get("report_id") or report_id
+            return payload
+
+        row = _fetch_report_row(report_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        payload = _flatten_report_row(row)
+        payload["status"] = "completed"
+        return payload
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get report error: {e}")
         raise HTTPException(status_code=404, detail="Report not found")
@@ -772,7 +958,13 @@ def get_latest_report(report_type: str = Query(...), company: Optional[str] = No
     """获取最新的报告"""
     try:
         logger.info(f"[Reports] Latest report requested for type={report_type}, company={company}")
-        return Response(status_code=204)
+        row = _fetch_latest_report_row(report_type, company)
+        if row is None:
+            return Response(status_code=204)
+
+        payload = _flatten_report_row(row)
+        payload["status"] = "completed"
+        return payload
     except Exception as e:
         logger.error(f"Error: {e}")
         return Response(status_code=204)
@@ -801,17 +993,61 @@ def get_report_statistics(
     try:
         # 解析时间范围
         start_date, end_date = period.split(":")
+        if get_client is None:
+            raise RuntimeError("Database module not available")
+
+        reports = (
+            get_client()
+            .table("esg_reports")
+            .select("id, report_type, generated_at")
+            .gte("generated_at", start_date)
+            .lte("generated_at", end_date)
+            .execute()
+            .data
+        )
+
+        by_type = {"daily": 0, "weekly": 0, "monthly": 0}
+        for report in reports:
+            report_name = report.get("report_type")
+            if report_name in by_type:
+                by_type[report_name] += 1
+
+        push_statistics = {
+            "total_notifications": 0,
+            "delivered": 0,
+            "read": 0,
+            "click_through_rate": 0,
+        }
+
+        try:
+            push_rows = (
+                get_client()
+                .table("report_push_history")
+                .select("push_status, read_at, click_through")
+                .gte("created_at", start_date)
+                .lte("created_at", end_date)
+                .execute()
+                .data
+            )
+            total_pushes = len(push_rows)
+            delivered = sum(1 for row in push_rows if row.get("push_status") == "sent")
+            read = sum(1 for row in push_rows if row.get("read_at"))
+            clicked = sum(1 for row in push_rows if row.get("click_through"))
+            push_statistics = {
+                "total_notifications": total_pushes,
+                "delivered": delivered,
+                "read": read,
+                "click_through_rate": round((clicked / total_pushes) * 100, 2) if total_pushes else 0,
+            }
+        except Exception as push_exc:
+            logger.warning(f"Push statistics unavailable: {push_exc}")
 
         return {
             "period": {"start": start_date, "end": end_date},
-            "total_reports": 0,
-            "by_type": {"daily": 0, "weekly": 0, "monthly": 0},
-            "push_statistics": {
-                "total_notifications": 0,
-                "delivered": 0,
-                "read": 0,
-                "click_through_rate": 0
-            }
+            "group_by": group_by,
+            "total_reports": len(reports),
+            "by_type": by_type,
+            "push_statistics": push_statistics,
         }
     except Exception as e:
         logger.error(f"Statistics error: {e}")
@@ -830,16 +1066,42 @@ def sync_data_sources(req: DataSyncRequest, background_tasks: BackgroundTasks):
 
     try:
         job_id = f"sync_{datetime.now().timestamp()}"
+        sync_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "started",
+            "companies_total": len(req.companies),
+            "companies_synced": 0,
+            "companies_failed": 0,
+            "total_records": 0,
+            "updated_at": datetime.now().isoformat(),
+        }
 
         def sync_task():
+            synced = 0
+            failed = 0
             for company in req.companies:
                 try:
-                    data_source_manager.sync_company_snapshot(
+                    success = data_source_manager.sync_company_snapshot(
                         company,
                         force_refresh=req.force_refresh
                     )
+                    if success:
+                        synced += 1
+                    else:
+                        failed += 1
                 except Exception as e:
+                    failed += 1
                     logger.warning(f"Sync error for {company}: {e}")
+
+            sync_jobs[job_id] = {
+                "job_id": job_id,
+                "status": "completed" if failed == 0 else "completed_with_errors",
+                "companies_total": len(req.companies),
+                "companies_synced": synced,
+                "companies_failed": failed,
+                "total_records": synced,
+                "updated_at": datetime.now().isoformat(),
+            }
 
         background_tasks.add_task(sync_task)
 
@@ -858,13 +1120,10 @@ def sync_data_sources(req: DataSyncRequest, background_tasks: BackgroundTasks):
 @app.get("/admin/data-sources/sync/{job_id}")
 def get_sync_status(job_id: str):
     """查询同步任务进度"""
-    return {
-        "job_id": job_id,
-        "status": "completed",
-        "companies_synced": 3,
-        "companies_failed": 0,
-        "total_records": 450
-    }
+    job = sync_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Sync job not found")
+    return job
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -960,13 +1219,28 @@ def delete_push_rule(rule_id: str):
 
 
 @app.post("/admin/push-rules/{rule_id}/test")
-def test_push_rule(rule_id: str, test_user_id: str, mock_report: Dict[str, Any]):
+def test_push_rule(rule_id: str, req: PushRuleTestRequest):
     """测试推送规则"""
+    channels = ["email", "in_app"]
+    matched = False
+
+    if report_scheduler and rule_id in report_scheduler.push_rules_cache:
+        rule = report_scheduler.push_rules_cache[rule_id]
+        channels = rule.push_channels
+        try:
+            matched = bool(eval(rule.condition, {"__builtins__": {}}, req.mock_report))
+        except Exception as e:
+            logger.warning(f"Push rule test failed for {rule_id}: {e}")
+
     return {
         "test_id": f"test_{datetime.now().timestamp()}",
         "rule_id": rule_id,
         "status": "success",
-        "channels_tested": ["email", "in_app"]
+        "results": {
+            "test_user_id": req.test_user_id,
+            "matched": matched,
+            "channels_tested": channels,
+        },
     }
 
 
@@ -990,10 +1264,10 @@ def subscribe_reports(req: UserReportSubscribeRequest, user_id: str = "user_123"
             frequency=req.frequency,
         )
 
-        report_scheduler.user_subscribe_reports(subscription)
+        subscription_id = report_scheduler.user_subscribe_reports(subscription)
 
         return {
-            "subscription_id": f"sub_{user_id}",
+            "subscription_id": subscription_id or f"sub_{user_id}",
             "user_id": user_id,
             "status": "subscribed",
             "subscribed_to": {
@@ -1011,28 +1285,81 @@ def subscribe_reports(req: UserReportSubscribeRequest, user_id: str = "user_123"
 @app.get("/user/reports/subscriptions")
 def get_user_subscriptions(user_id: str = "user_123"):
     """获取用户订阅"""
-    return {
-        "user_id": user_id,
-        "subscriptions": []
-    }
+    if get_client is None:
+        return {
+            "user_id": user_id,
+            "subscriptions": [],
+            "degraded": True,
+            "message": "Database module not available",
+        }
+
+    try:
+        rows = (
+            get_client()
+            .table("user_report_subscriptions")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("subscribed_at", desc=True)
+            .execute()
+            .data
+        )
+
+        subscriptions = [
+            {
+                "subscription_id": row.get("id"),
+                "user_id": row.get("user_id"),
+                "report_types": row.get("report_types", []),
+                "companies": row.get("companies", []),
+                "alert_threshold": row.get("alert_threshold", {}),
+                "push_channels": row.get("push_channels", []),
+                "frequency": row.get("frequency"),
+                "subscribed_at": row.get("subscribed_at"),
+                "updated_at": row.get("updated_at"),
+            }
+            for row in rows
+        ]
+
+        return {
+            "user_id": user_id,
+            "subscriptions": subscriptions,
+        }
+    except Exception as e:
+        logger.error(f"Get subscriptions error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.put("/user/reports/subscriptions/{subscription_id}")
 def update_subscription(subscription_id: str, updates: Dict[str, Any]):
     """更新订阅"""
-    return {
-        "subscription_id": subscription_id,
-        "status": "updated"
-    }
+    if get_client is None:
+        raise HTTPException(status_code=503, detail="Database module not available")
+
+    try:
+        get_client().table("user_report_subscriptions").update(updates).eq("id", subscription_id).execute()
+        return {
+            "subscription_id": subscription_id,
+            "status": "updated"
+        }
+    except Exception as e:
+        logger.error(f"Update subscription error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.delete("/user/reports/subscriptions/{subscription_id}")
 def unsubscribe(subscription_id: str):
     """取消订阅"""
-    return {
-        "subscription_id": subscription_id,
-        "status": "deleted"
-    }
+    if get_client is None:
+        raise HTTPException(status_code=503, detail="Database module not available")
+
+    try:
+        get_client().table("user_report_subscriptions").delete().eq("id", subscription_id).execute()
+        return {
+            "subscription_id": subscription_id,
+            "status": "deleted"
+        }
+    except Exception as e:
+        logger.error(f"Delete subscription error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ════════════════════════════════════════════════════════════════════════════

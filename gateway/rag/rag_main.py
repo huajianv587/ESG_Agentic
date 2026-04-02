@@ -11,12 +11,13 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.node_parser import get_leaf_nodes
 from llama_index.core.llms import CustomLLM, LLMMetadata, CompletionResponse, CompletionResponseGen
 from llama_index.core.llms.callbacks import llm_completion_callback
-from llama_index.embeddings.openai import OpenAIEmbedding
 
 from gateway.rag.chunking  import chunk_documents
-from gateway.rag.ingestion import build_index
+from gateway.rag.ingestion import build_index, COLLECTION_NAME
 from gateway.rag.indexer   import collection_exists, load_index, persist_storage, _get_qdrant_client
+from gateway.rag.embeddings import get_embed_model, validate_collection_embedding_dimension
 from gateway.rag.retriever import build_query_engine
+from gateway.rag.text_quality import clean_document_text
 from gateway.utils.llm_client import chat as _llm_chat
 
 
@@ -51,13 +52,8 @@ class ESGLocalLLM(CustomLLM):
 # 注册为 LlamaIndex 全局 LLM，所有 query_engine 都会走这套模型
 Settings.llm = ESGLocalLLM()
 
-# 显式设置 embedding 模型和 batch_size，避免 LlamaIndex 回退到默认 batch_size=10
-# 未配置时 LlamaIndex 默认 batch_size=10，25 文档 ~775 叶节点需要 78 次 API 调用（约2分钟）
-# 配置 batch_size=100 后只需 ~8 次调用（约8秒）
-Settings.embed_model = OpenAIEmbedding(
-    model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small").split("#")[0].strip(),
-    embed_batch_size=int(os.getenv("EMBEDDING_BATCH_SIZE", "100")),
-)
+# 查询和重建都走统一的 embedding provider。
+Settings.embed_model = get_embed_model()
 
 # ESG 报告存放目录
 DATA_DIR = str(Path(__file__).resolve().parents[2] / "data" / "raw")
@@ -95,6 +91,10 @@ def get_query_engine(force_rebuild: bool = False) -> RetrieverQueryEngine:
         if not need_rebuild:
             # ── 快速恢复路径 ──────────────────────────────────────────
             try:
+                validate_collection_embedding_dimension(
+                    client.get_collection(COLLECTION_NAME),
+                    COLLECTION_NAME,
+                )
                 print("[RAG] Existing index found — loading from Qdrant + docstore...")
                 index, storage_context = load_index()
                 leaf_nodes = _get_leaf_nodes_from_docstore(storage_context)
@@ -154,13 +154,23 @@ def _load_documents():
     if not docs:
         raise ValueError(f"No documents found in {DATA_DIR}")
 
-    # 清洗文本：移除空字节和非法控制字符，防止 OpenAI API 400 JSON 解析错误
+    original_chars = 0
+    cleaned_chars = 0
     for doc in docs:
-        cleaned = doc.text.replace('\x00', ' ')
-        cleaned = ''.join(ch for ch in cleaned if ch >= ' ' or ch in '\n\r\t')
+        original = doc.text or ""
+        original_chars += len(original)
+
+        cleaned = clean_document_text(original, min_line_score=0.18)
+        if not cleaned:
+            cleaned = original.replace('\x00', ' ')
+
+        cleaned_chars += len(cleaned)
         doc.set_content(cleaned)
 
-    print(f"[RAG] Loaded {len(docs)} document(s) from {DATA_DIR}")
+    print(
+        f"[RAG] Loaded {len(docs)} document(s) from {DATA_DIR} "
+        f"(cleaned {original_chars:,} -> {cleaned_chars:,} chars)"
+    )
     return docs
 
 

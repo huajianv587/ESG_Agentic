@@ -51,7 +51,7 @@ async function init() {
   await checkHealth();
 
   // 初始化会话
-  initSession();
+  await initSession();
 
   // 全局事件监听
   setupGlobalListeners();
@@ -80,7 +80,7 @@ async function checkHealth() {
 /**
  * 初始化用户会话
  */
-function initSession() {
+async function initSession() {
   let sessionId = localStorage.getItem('esg_session_id');
 
   if (!sessionId) {
@@ -94,8 +94,15 @@ function initSession() {
     createdAt: new Date().toISOString(),
   });
 
+  // 先在后端注册会话，避免聊天记录写入时触发外键错误。
+  try {
+    await api.session.create(sessionId);
+  } catch (error) {
+    console.warn('无法在后端创建会话，继续使用本地会话', error);
+  }
+
   // 尝试加载历史记录
-  loadSessionHistory(sessionId);
+  await loadSessionHistory(sessionId);
 }
 
 /**
@@ -105,9 +112,10 @@ function initSession() {
 async function loadSessionHistory(sessionId) {
   try {
     const history = await api.session.getHistory(sessionId);
-    if (history && history.length > 0) {
-      store.set('chatMessages', history);
-      console.log('📚 加载会话历史:', history.length, '条消息');
+    const messages = history?.messages || [];
+    if (messages.length > 0) {
+      store.set('chatMessages', messages);
+      console.log('📚 加载会话历史:', messages.length, '条消息');
     }
   } catch (error) {
     console.warn('无法加载会话历史', error);
