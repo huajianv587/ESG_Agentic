@@ -235,6 +235,21 @@ cd gateway
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+### Windows Hybrid Mode (Local-first + Remote GPU)
+
+Recommended when the local machine is the long-term development base and the
+remote host only provides temporary GPU compute:
+
+```bat
+scripts\bootstrap_local_windows.bat
+scripts\start_local_qdrant_windows.bat
+scripts\run_local_hybrid_windows.bat
+```
+
+See [docs/LOCAL_HYBRID_RUNBOOK.md](docs/LOCAL_HYBRID_RUNBOOK.md) for the full
+workflow, including the SSH tunnel and runtime doctor checks.
+Chinese guide: [docs/LOCAL_HYBRID_RUNBOOK_ZH.md](docs/LOCAL_HYBRID_RUNBOOK_ZH.md)
+
 ## Database Setup
 
 Run the SQL migrations in order against your Supabase PostgreSQL instance:

@@ -26,8 +26,25 @@ def _env_bool(*names: str, default: bool) -> bool:
     return str(value).lower() in {"1", "true", "yes", "on"}
 
 
+def _env_choice(*names: str, default: str, allowed: set[str]) -> str:
+    value = _first_env(*names, default=default).strip().lower()
+    return value if value in allowed else default
+
+
 class Settings:
     def __init__(self):
+        # ── Runtime mode ───────────────────────────────────────────────
+        self.APP_MODE = _env_choice(
+            "APP_MODE",
+            default="local",
+            allowed={"local", "hybrid", "prod"},
+        )
+        self.LLM_BACKEND_MODE = _env_choice(
+            "LLM_BACKEND_MODE",
+            default="auto",
+            allowed={"auto", "local", "remote", "cloud"},
+        )
+
         # ── LLM APIs ───────────────────────────────────────────────────
         self.OPENAI_API_KEY = _first_env("OPENAI_API_KEY")
         self.ANTHROPIC_API_KEY = _first_env("ANTHROPIC_API_KEY")

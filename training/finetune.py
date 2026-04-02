@@ -2,18 +2,6 @@ import argparse
 import inspect
 from pathlib import Path
 
-import torch
-from datasets import load_dataset
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    DataCollatorForSeq2Seq,
-    Trainer,
-    TrainingArguments,
-)
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -40,6 +28,10 @@ DEFAULT_OUT = _prefer_existing(
 
 
 def load_model(model_name: str):
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    from peft import prepare_model_for_kbit_training
+
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_compute_dtype=torch.float16,
@@ -61,6 +53,8 @@ def load_model(model_name: str):
 
 
 def build_lora(model):
+    from peft import LoraConfig, get_peft_model
+
     config = LoraConfig(
         r=16,
         lora_alpha=32,
@@ -76,6 +70,8 @@ def build_lora(model):
 
 
 def build_dataset(tokenizer, train_data_path: str, val_data_path: str, max_length: int = 512):
+    from datasets import load_dataset
+
     train_ds = load_dataset("json", data_files=train_data_path, split="train")
     val_ds   = load_dataset("json", data_files=val_data_path,   split="train")
 
@@ -110,6 +106,8 @@ def build_dataset(tokenizer, train_data_path: str, val_data_path: str, max_lengt
 
 
 def build_trainer(model, tokenizer, ds_train, ds_val, out_dir: str, num_train_epochs: int = 2):
+    from transformers import DataCollatorForSeq2Seq, Trainer, TrainingArguments
+
     args_kwargs = dict(
         output_dir=out_dir,
         learning_rate=2e-4,

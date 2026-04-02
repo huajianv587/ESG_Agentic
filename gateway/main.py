@@ -72,6 +72,8 @@ except Exception as _e:
     import logging; logging.getLogger(__name__).warning(f"ReportScheduler模块加载失败: {_e}")
     ReportScheduler = PushRule = ReportSubscription = None
 
+from gateway.config import settings
+from gateway.utils.llm_client import get_runtime_backend_status
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -376,6 +378,8 @@ def health():
     return {
         "status": "ok",
         "timestamp": datetime.now().isoformat(),
+        "app_mode": settings.APP_MODE,
+        "runtime": get_runtime_backend_status(),
         "modules": {
             "rag": query_engine is not None,
             "esg_scorer": esg_scorer is not None,

@@ -50,6 +50,7 @@ def test_chat_remote_uses_configured_service(monkeypatch):
 def test_chat_prefers_remote_service_before_cloud_fallback(monkeypatch):
     monkeypatch.setattr(llm_client, "_local_fail_count", llm_client.MAX_LOCAL_FAILURES)
     monkeypatch.setattr(llm_client, "_remote_fail_count", 0)
+    monkeypatch.setattr(llm_client.settings, "LLM_BACKEND_MODE", "auto")
     monkeypatch.setattr(llm_client.settings, "REMOTE_LLM_URL", "http://127.0.0.1:8010")
     monkeypatch.setattr(llm_client, "_chat_remote", lambda messages, max_tokens, temperature: "remote-answer")
     monkeypatch.setattr(
@@ -65,3 +66,38 @@ def test_chat_prefers_remote_service_before_cloud_fallback(monkeypatch):
     )
 
     assert result == "remote-answer"
+
+
+def test_chat_remote_mode_skips_local_backend(monkeypatch):
+    monkeypatch.setattr(llm_client, "_local_fail_count", 0)
+    monkeypatch.setattr(llm_client, "_remote_fail_count", 0)
+    monkeypatch.setattr(llm_client.settings, "LLM_BACKEND_MODE", "remote")
+    monkeypatch.setattr(llm_client.settings, "REMOTE_LLM_URL", "http://127.0.0.1:8010")
+    monkeypatch.setattr(
+        llm_client,
+        "_chat_local",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("local backend should be skipped")),
+    )
+    monkeypatch.setattr(llm_client, "_chat_remote", lambda messages, max_tokens, temperature: "remote-only")
+
+    result = llm_client.chat(
+        [{"role": "user", "content": "Summarize Grab social commitments."}],
+        temperature=0.2,
+        max_tokens=128,
+    )
+
+    assert result == "remote-only"
+
+
+def test_runtime_backend_status_reports_mode(monkeypatch):
+    monkeypatch.setattr(llm_client.settings, "APP_MODE", "hybrid")
+    monkeypatch.setattr(llm_client.settings, "LLM_BACKEND_MODE", "remote")
+    monkeypatch.setattr(llm_client.settings, "REMOTE_LLM_URL", "http://127.0.0.1:8010")
+    monkeypatch.setattr(llm_client.torch.cuda, "is_available", lambda: False)
+
+    status = llm_client.get_runtime_backend_status()
+
+    assert status["app_mode"] == "hybrid"
+    assert status["llm_backend_mode"] == "remote"
+    assert status["remote_llm_configured"] is True
+    assert status["local_llm_cuda_available"] is False

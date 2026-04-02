@@ -64,6 +64,21 @@ def _local_backend_supported() -> bool:
 _local_backend_supported()
 
 
+def _backend_mode() -> str:
+    mode = str(getattr(settings, "LLM_BACKEND_MODE", "auto") or "auto").strip().lower()
+    return mode if mode in {"auto", "local", "remote", "cloud"} else "auto"
+
+
+def get_runtime_backend_status() -> dict:
+    return {
+        "app_mode": getattr(settings, "APP_MODE", "local"),
+        "llm_backend_mode": _backend_mode(),
+        "remote_llm_configured": _remote_backend_configured(),
+        "local_llm_cuda_available": torch.cuda.is_available(),
+        "local_checkpoint_exists": Path(LOCAL_CKPT).exists(),
+    }
+
+
 def _remote_backend_configured() -> bool:
     return bool(settings.REMOTE_LLM_URL)
 
@@ -267,9 +282,13 @@ def chat(
         reply = chat([{"role": "user", "content": "What is ESG?"}])
     """
     global _local_fail_count, _remote_fail_count
+    backend_mode = _backend_mode()
+    allow_local = backend_mode in {"auto", "local"}
+    allow_remote = backend_mode in {"auto", "remote"}
+    allow_cloud = backend_mode in {"auto", "local", "remote", "cloud"}
 
     # ── 1. 本地 LoRA 模型 ────────────────────────────────────────────────
-    if _local_fail_count < MAX_LOCAL_FAILURES:
+    if allow_local and _local_fail_count < MAX_LOCAL_FAILURES:
         try:
             result = _chat_local(messages, max_new_tokens=max_tokens)
             _local_fail_count = 0   # 成功则重置计数
@@ -281,11 +300,11 @@ def chat(
             )
             if _local_fail_count >= MAX_LOCAL_FAILURES:
                 logger.error("[LLM] Local model disabled after repeated failures, switching to cloud.")
-    else:
+    elif allow_local:
         logger.debug("[LLM] Local model skipped (too many failures), using cloud.")
 
     # ── 2. 远端 GPU LoRA 服务 ───────────────────────────────────────────
-    if _remote_backend_configured():
+    if allow_remote and _remote_backend_configured():
         if _remote_fail_count < MAX_REMOTE_FAILURES:
             try:
                 result = _chat_remote(messages, max_tokens=max_tokens, temperature=temperature)
@@ -301,6 +320,12 @@ def chat(
                     logger.error("[LLM] Remote LLM disabled after repeated failures, switching to cloud API.")
         else:
             logger.debug("[LLM] Remote LLM skipped (too many failures), using cloud API.")
+
+    if not allow_cloud:
+        raise RuntimeError(
+            "No enabled LLM backend succeeded. "
+            f"LLM_BACKEND_MODE={backend_mode!r} currently disables cloud fallback."
+        )
 
     # ── 3. OpenAI GPT-4o ────────────────────────────────────────────────
     try:

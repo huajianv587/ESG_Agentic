@@ -37,6 +37,8 @@ ssh -N -L 8010:127.0.0.1:8010 -p <PORT> root@<REMOTE_HOST>
 ## Local `.env`
 
 ```bash
+APP_MODE=hybrid
+LLM_BACKEND_MODE=remote
 REMOTE_LLM_URL=http://127.0.0.1:8010
 REMOTE_LLM_API_KEY=replace-with-a-shared-secret
 ```
@@ -63,5 +65,5 @@ Local app:
 
 ```bash
 python -m pytest tests/test_llm_client_runtime.py -q
-python scripts/staging_check.py smoke --base-url http://localhost:8000
+python scripts/runtime_doctor.py
 ```

@@ -104,6 +104,8 @@ def test_health_endpoint_returns_basic_status():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
+    assert data["app_mode"] in {"local", "hybrid", "prod"}
+    assert "runtime" in data
     assert "modules" in data
 
 
