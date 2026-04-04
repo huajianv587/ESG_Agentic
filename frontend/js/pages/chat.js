@@ -91,7 +91,7 @@ function buildHTML() {
 
       <!-- 输入区域 -->
       <div data-hover-glow="true" class="chat-composer bg-[var(--bg-surface)] border border-[var(--bg-border)] rounded-[22px] p-4">
-        <div id="input-area" class="flex gap-3">
+        <div id="input-area" class="flex flex-col gap-3 md:flex-row">
           <textarea
             id="chat-input"
             class="flex-1 min-h-[108px] bg-[#1C2333] border border-[var(--bg-border)] rounded-2xl p-4 text-[#F0F4F8] resize-none focus:outline-none"
@@ -100,7 +100,7 @@ function buildHTML() {
           ></textarea>
           <button
             id="send-btn"
-            class="btn-primary px-6 py-3 self-end min-w-[92px]"
+            class="btn-primary px-6 py-3 w-full md:w-auto self-stretch md:self-end min-w-[92px]"
           >
             发送
           </button>

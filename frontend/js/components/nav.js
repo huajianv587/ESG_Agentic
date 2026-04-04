@@ -24,7 +24,7 @@ export function renderNav() {
     link.dataset.hoverGlow = 'true';
     link.className = `
       nav-link
-      block px-5 py-4 rounded-2xl text-[17px] font-semibold
+      block shrink-0 whitespace-nowrap px-4 py-3 sm:px-5 sm:py-4 rounded-2xl text-base sm:text-[17px] font-semibold
       transition-all duration-200 border
       ${isActive
         ? 'bg-[rgba(94,165,255,0.12)] text-[#8ec5ff] border-[rgba(94,165,255,0.3)] shadow-[0_10px_24px_rgba(0,0,0,0.12)]'

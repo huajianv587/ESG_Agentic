@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Body
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 
@@ -386,6 +386,12 @@ def health():
             "report_scheduler": report_scheduler is not None,
         }
     }
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    """默认跳转到前端控制台"""
+    return RedirectResponse(url="/app", status_code=307)
 
 
 @app.get("/dashboard/overview")

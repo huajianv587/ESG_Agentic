@@ -91,7 +91,7 @@ export function createGaugeRow(scores) {
   ];
 
   return `
-    <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
       ${dims.map(dim => `
         <div class="card text-center">
           <div class="gauge-container" style="height: 120px;">

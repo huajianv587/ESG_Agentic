@@ -3,9 +3,19 @@
  * 封装所有 HTTP 请求到后端
  */
 
-// 相对路径：通过 nginx 代理访问后端（docker 部署），或直连 uvicorn（本地开发）
-// 若需要跨域直连，可改为 'http://localhost:8000'
-const BASE_URL = '';
+// 默认走同源；静态部署到 Vercel / Cloudflare Pages 时，可通过 frontend/app-config.js
+// 或部署环境生成的 app-config.js 覆盖 API 域名，例如 https://api.example.com
+const BASE_URL = resolveBaseUrl();
+
+function resolveBaseUrl() {
+  const configuredBaseUrl = window.__ESG_API_BASE_URL__ || '';
+  return normalizeBaseUrl(configuredBaseUrl);
+}
+
+function normalizeBaseUrl(value) {
+  if (!value) return '';
+  return String(value).trim().replace(/\/+$/, '');
+}
 
 /**
  * 通用 HTTP 请求封装

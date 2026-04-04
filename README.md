@@ -312,6 +312,26 @@ See [deploy/README.md](deploy/README.md) for full AWS deployment guide including
 - ECS task definition with Secrets Manager
 - ALB + CloudWatch monitoring
 
+### Vercel + Cloudflare Pages + Railway
+
+This repo now includes first-class configs for a split deployment setup:
+
+- `railway.toml` deploys the FastAPI backend from [gateway/Dockerfile](gateway/Dockerfile)
+- `vercel.json` builds a static frontend bundle into `dist/`
+- `wrangler.toml` supports Cloudflare Pages using the same `dist/` output
+
+Recommended setup:
+
+1. Deploy the backend to Railway and set all server-side secrets there.
+2. Set `CORS_ORIGINS` on Railway to your Vercel / Cloudflare frontend domains.
+3. Set `ESG_API_BASE_URL` on Vercel or Cloudflare Pages to your Railway backend URL.
+4. Use the build command `npm run build:static` for static frontend deployments.
+
+The frontend build writes `dist/app/app-config.js`, so the same codebase can run:
+
+- on Railway at `/app` with same-origin API calls
+- on Vercel / Cloudflare Pages with an external API base URL
+
 ## Documentation
 
 - [API Endpoints Reference](docs/API_ENDPOINTS.md)

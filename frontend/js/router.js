@@ -3,7 +3,7 @@
  * 单页应用路由管理 (#/chat, #/score, ...)
  */
 
-const ASSET_VERSION = window.__APP_ASSET_VERSION__ || '20260330-frontend-v5';
+const ASSET_VERSION = window.__APP_ASSET_VERSION__ || '20260404-frontend-v7';
 const FLAGSHIP_LANDING_KEY = 'esg-flagship-landing-seen';
 const FLAGSHIP_LANDING_VERSION = '20260330-v5';
 

@@ -37,7 +37,7 @@ function buildHTML() {
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium mb-2">选择数据源</label>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
               ${SOURCES.map(source => `
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" class="source-cb" value="${source}" checked />
@@ -52,12 +52,12 @@ function buildHTML() {
             <input id="companies-input" type="text" class="w-full" placeholder="例如：TSLA,AAPL,MSFT" />
           </div>
 
-          <div class="flex items-center gap-4">
+          <div class="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             <label class="flex items-center gap-2 cursor-pointer">
               <input id="force-refresh-cb" type="checkbox" />
               <span class="text-sm">强制刷新缓存</span>
             </label>
-            <button id="sync-btn" class="btn-primary">开始同步</button>
+            <button id="sync-btn" class="btn-primary w-full sm:w-auto">开始同步</button>
           </div>
         </div>
       </div>

@@ -58,8 +58,8 @@ function buildHTML() {
             <label class="block text-sm font-medium mb-2">对标公司 (可选)</label>
             <input id="peers-input" type="text" class="w-full" placeholder="以逗号分隔，例如：Ford,GM" />
           </div>
-          <div class="flex gap-2">
-            <button id="score-btn" class="btn-primary">生成评分</button>
+          <div class="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            <button id="score-btn" class="btn-primary w-full sm:w-auto">生成评分</button>
             <label class="flex items-center gap-2 cursor-pointer">
               <input id="historical-cb" type="checkbox" />
               <span class="text-sm">包含历史数据</span>
