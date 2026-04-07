@@ -1,8 +1,12 @@
 # ESG Agentic RAG Copilot - 完整部署指南
 
+> 注意：这份文档包含较早阶段的历史内容，不应再作为当前交付的唯一依据。
+> 当前请优先以 `README.md`、`deploy/README.md`、`docs/LOCAL_HYBRID_RUNBOOK*.md`
+> 和 `docs/REMOTE_GPU_RUNBOOK.md` 为准。
+
 **项目完成日期**: 2026-03-29
 **版本**: 1.0.0
-**状态**: ✅ 生产就绪
+**状态**: ⚠️ 历史文档，需按当前代码与运行手册复核
 
 ---
 

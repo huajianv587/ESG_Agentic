@@ -21,7 +21,8 @@ def wait_for_health(base_url: str, timeout: int) -> tuple[bool, dict | str]:
     last_error: str = "not started"
     while time.time() < deadline:
         try:
-            response = requests.get(f"{base_url}/health", timeout=5)
+            response = requests.get(f"{base_url}/health/ready", timeout=5)
+            response.raise_for_status()
             return True, response.json()
         except Exception as exc:  # pragma: no cover - runtime diagnostic helper
             last_error = str(exc)

@@ -107,11 +107,35 @@ def test_health_endpoint_returns_basic_status():
     assert data["app_mode"] in {"local", "hybrid", "prod"}
     assert "runtime" in data
     assert "modules" in data
+    assert "ready" in data
+
+
+def test_ready_endpoint_tracks_rag_initialization():
+    client = TestClient(main_module.app)
+    previous = getattr(main_module.app.state, "query_engine", None)
+    previous_scorer = main_module.runtime.esg_scorer
+    previous_scheduler = main_module.runtime.report_scheduler
+    try:
+        main_module.runtime.esg_scorer = object()
+        main_module.runtime.report_scheduler = object()
+        main_module.app.state.query_engine = None
+        not_ready = client.get("/health/ready")
+        assert not_ready.status_code == 503
+        assert not_ready.json()["ready"] is False
+
+        main_module.app.state.query_engine = object()
+        ready = client.get("/health/ready")
+        assert ready.status_code == 200
+        assert ready.json()["ready"] is True
+    finally:
+        main_module.app.state.query_engine = previous
+        main_module.runtime.esg_scorer = previous_scorer
+        main_module.runtime.report_scheduler = previous_scheduler
 
 
 def test_analyze_endpoint_accepts_query_params(monkeypatch):
     monkeypatch.setattr(
-        main_module,
+        main_module.runtime,
         "run_agent",
         lambda question, session_id="": {
             "final_answer": f"answer:{question}:{session_id}",
@@ -120,7 +144,7 @@ def test_analyze_endpoint_accepts_query_params(monkeypatch):
             "analysis_summary": "ok",
         },
     )
-    monkeypatch.setattr(main_module, "save_message", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main_module.runtime, "save_message", lambda *args, **kwargs: None)
     client = TestClient(main_module.app)
 
     response = client.post("/agent/analyze", params={"question": "Tesla", "session_id": "s1"})
@@ -134,7 +158,7 @@ def test_analyze_endpoint_accepts_query_params(monkeypatch):
 
 def test_analyze_endpoint_accepts_json_body(monkeypatch):
     monkeypatch.setattr(
-        main_module,
+        main_module.runtime,
         "run_agent",
         lambda question, session_id="": {
             "final_answer": "json-body-ok",
@@ -143,7 +167,7 @@ def test_analyze_endpoint_accepts_json_body(monkeypatch):
             "analysis_summary": "body",
         },
     )
-    monkeypatch.setattr(main_module, "save_message", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main_module.runtime, "save_message", lambda *args, **kwargs: None)
     client = TestClient(main_module.app)
 
     response = client.post("/agent/analyze", json={"question": "Apple", "session_id": "json-session"})
@@ -154,8 +178,8 @@ def test_analyze_endpoint_accepts_json_body(monkeypatch):
 
 def test_report_generation_accepts_async_alias(monkeypatch):
     fake_scheduler = _FakeReportScheduler()
-    monkeypatch.setattr(main_module, "report_generator", _FakeReportGenerator())
-    monkeypatch.setattr(main_module, "report_scheduler", fake_scheduler)
+    monkeypatch.setattr(main_module.runtime, "report_generator", _FakeReportGenerator())
+    monkeypatch.setattr(main_module.runtime, "report_scheduler", fake_scheduler)
     client = TestClient(main_module.app)
 
     response = client.post(
@@ -171,7 +195,7 @@ def test_report_generation_accepts_async_alias(monkeypatch):
 
 
 def test_report_generation_rejects_invalid_async_type(monkeypatch):
-    monkeypatch.setattr(main_module, "report_generator", _FakeReportGenerator())
+    monkeypatch.setattr(main_module.runtime, "report_generator", _FakeReportGenerator())
     client = TestClient(main_module.app)
 
     response = client.post(
@@ -203,7 +227,7 @@ def test_latest_report_route_returns_flattened_payload(monkeypatch):
             ]
         }
     )
-    monkeypatch.setattr(main_module, "get_client", lambda: fake_db)
+    monkeypatch.setattr(main_module.runtime, "get_client", lambda: fake_db)
     client = TestClient(main_module.app)
 
     response = client.get("/admin/reports/latest", params={"report_type": "daily"})
@@ -216,8 +240,8 @@ def test_latest_report_route_returns_flattened_payload(monkeypatch):
 
 
 def test_esg_score_endpoint_preserves_service_unavailable(monkeypatch):
-    monkeypatch.setattr(main_module, "esg_scorer", object())
-    monkeypatch.setattr(main_module, "data_source_manager", None)
+    monkeypatch.setattr(main_module.runtime, "esg_scorer", object())
+    monkeypatch.setattr(main_module.runtime, "data_source_manager", None)
     client = TestClient(main_module.app)
 
     response = client.post("/agent/esg-score", json={"company": "Tesla"})
@@ -228,7 +252,7 @@ def test_esg_score_endpoint_preserves_service_unavailable(monkeypatch):
 
 def test_sync_status_tracks_background_result(monkeypatch):
     fake_manager = _FakeDataSourceManager()
-    monkeypatch.setattr(main_module, "data_source_manager", fake_manager)
+    monkeypatch.setattr(main_module.runtime, "data_source_manager", fake_manager)
     client = TestClient(main_module.app)
 
     response = client.post(
@@ -255,7 +279,7 @@ def test_push_rule_test_endpoint_accepts_json_body(monkeypatch):
         {"condition": "overall_score < 40", "push_channels": ["email", "webhook"]},
     )()
     fake_scheduler = type("FakeScheduler", (), {"push_rules_cache": {"rule-1": fake_rule}})()
-    monkeypatch.setattr(main_module, "report_scheduler", fake_scheduler)
+    monkeypatch.setattr(main_module.runtime, "report_scheduler", fake_scheduler)
     client = TestClient(main_module.app)
 
     response = client.post(
@@ -287,7 +311,7 @@ def test_user_subscriptions_endpoint_reads_database(monkeypatch):
             ]
         }
     )
-    monkeypatch.setattr(main_module, "get_client", lambda: fake_db)
+    monkeypatch.setattr(main_module.runtime, "get_client", lambda: fake_db)
     client = TestClient(main_module.app)
 
     response = client.get("/user/reports/subscriptions", params={"user_id": "user_123"})

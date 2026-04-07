@@ -26,4 +26,5 @@ if errorlevel 1 exit /b %errorlevel%
 
 echo.
 echo [bootstrap] Local environment ready.
-echo [bootstrap] Next step: scripts\run_local_hybrid_windows.bat
+echo [bootstrap] Recommended next step: scripts\run_local_first_windows.bat
+echo [bootstrap] Optional remote GPU path: scripts\run_local_hybrid_windows.bat

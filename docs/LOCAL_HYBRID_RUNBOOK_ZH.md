@@ -1,5 +1,8 @@
 # 本地长期开发 / 云端算力临时接入操作手册
 
+说明：这份手册是给“将来重新接回远端 GPU / 5090”时使用的可选方案。
+当前产品交付基线建议优先使用本地模式：`APP_MODE=local`、`LLM_BACKEND_MODE=auto`。
+
 这套模式的目标很明确：
 
 - 本地电脑是主工程、主数据、主开发环境
@@ -38,7 +41,7 @@ REMOTE_LLM_API_KEY=你的共享密钥
 含义：
 
 - `APP_MODE=hybrid`：本地为主，云端算力辅助
-- `LLM_BACKEND_MODE=remote`：回答生成优先走远端 GPU 服务
+- `LLM_BACKEND_MODE=remote`：回答生成优先走远端 GPU 服务，失败后再走 DeepSeek，最后 OpenAI
 
 ## 三、第一次准备
 

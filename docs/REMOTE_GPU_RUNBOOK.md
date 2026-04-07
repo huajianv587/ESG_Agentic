@@ -1,5 +1,8 @@
 # Remote GPU Runbook
 
+Note: this path is optional and intended for the future case where you bring a
+remote GPU host back online. The current delivery baseline is local-first mode.
+
 This mode keeps the RAG stack on the local machine and moves only the LoRA
 generation step to a remote GPU host.
 
@@ -45,13 +48,11 @@ REMOTE_LLM_API_KEY=replace-with-a-shared-secret
 
 With this set, `gateway/utils/llm_client.py` will try:
 
-1. local LoRA backend
-2. remote GPU LoRA service
+1. remote GPU LoRA service
+2. DeepSeek
 3. OpenAI
-4. DeepSeek
 
-On CPU-only local machines the local LoRA backend is skipped automatically, so
-the remote GPU service becomes the primary generation backend.
+In `remote` mode the remote GPU service is the primary generation backend.
 
 ## Smoke Checks
 

@@ -132,7 +132,7 @@ ESG Agentic RAG Copilot/
 │   ├── models/
 │   │   └── schemas.py        # Pydantic models
 │   └── utils/                # Shared utilities
-│       ├── llm_client.py     # Multi-LLM client (OpenAI/Anthropic/DeepSeek)
+│       ├── llm_client.py     # Multi-LLM client (local/remote/DeepSeek/OpenAI)
 │       ├── logger.py         # Structured logging
 │       ├── cache.py          # In-memory cache
 │       └── retry.py          # Retry logic
@@ -235,10 +235,26 @@ cd gateway
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Windows Hybrid Mode (Local-first + Remote GPU)
+### Windows Local-First Mode (Recommended)
 
-Recommended when the local machine is the long-term development base and the
-remote host only provides temporary GPU compute:
+Recommended for the current delivery baseline when you are not enabling a
+remote GPU host yet:
+
+```bat
+scripts\bootstrap_local_windows.bat
+scripts\start_local_qdrant_windows.bat
+scripts\run_local_first_windows.bat
+```
+
+Default generation order:
+
+- local model
+- DeepSeek
+- OpenAI
+
+### Windows Hybrid Mode (Optional Remote GPU / Future 5090)
+
+Use this only when you explicitly bring back a remote GPU host later:
 
 ```bat
 scripts\bootstrap_local_windows.bat
@@ -249,6 +265,7 @@ scripts\run_local_hybrid_windows.bat
 See [docs/LOCAL_HYBRID_RUNBOOK.md](docs/LOCAL_HYBRID_RUNBOOK.md) for the full
 workflow, including the SSH tunnel and runtime doctor checks.
 Chinese guide: [docs/LOCAL_HYBRID_RUNBOOK_ZH.md](docs/LOCAL_HYBRID_RUNBOOK_ZH.md)
+Remote-only details: [docs/REMOTE_GPU_RUNBOOK.md](docs/REMOTE_GPU_RUNBOOK.md)
 
 ## Database Setup
 
@@ -334,6 +351,7 @@ The frontend build writes `dist/app/app-config.js`, so the same codebase can run
 
 ## Documentation
 
+- [Product Delivery Checklist (ZH)](docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md)
 - [API Endpoints Reference](docs/API_ENDPOINTS.md)
 - [Data Source Replacement Guide](docs/DATA_SOURCE_REPLACEMENT_GUIDE.md)
 - [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)

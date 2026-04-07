@@ -1,5 +1,9 @@
 # Local Hybrid Runbook
 
+Note: this is an optional runbook for the future remote GPU path. The current
+product delivery baseline is local-first mode (`APP_MODE=local`,
+`LLM_BACKEND_MODE=auto`).
+
 This is the recommended long-term workflow for a Windows local machine that
 keeps the application, RAG, and data on the local computer, while borrowing GPU
 compute from a remote host only for LLM generation.
@@ -41,6 +45,12 @@ LLM_BACKEND_MODE=remote
 REMOTE_LLM_URL=http://127.0.0.1:8010
 REMOTE_LLM_API_KEY=replace-with-your-shared-secret
 ```
+
+In this mode the generation order is:
+
+1. remote GPU LoRA service
+2. DeepSeek
+3. OpenAI
 
 ## 4. Start local Qdrant
 

@@ -18,6 +18,7 @@ LOCAL_CKPT    = str(PROJECT_ROOT / "model-serving" / "checkpoint")
 LOCAL_BASE    = "Qwen/Qwen2.5-7B-Instruct"
 MAX_LOCAL_FAILURES = 3   # 连续失败超过这个数就切到云端
 MAX_REMOTE_FAILURES = 3
+CLOUD_FALLBACK_ORDER = ("deepseek", "openai")
 
 # ── 单例变量 ──────────────────────────────────────────────────────────────────
 _local_model     = None  # 本地模型实例（避免重复加载）
@@ -74,6 +75,8 @@ def get_runtime_backend_status() -> dict:
         "app_mode": getattr(settings, "APP_MODE", "local"),
         "llm_backend_mode": _backend_mode(),
         "remote_llm_configured": _remote_backend_configured(),
+        "remote_llm_enabled_in_mode": _backend_mode() == "remote",
+        "cloud_fallback_order": list(CLOUD_FALLBACK_ORDER),
         "local_llm_cuda_available": torch.cuda.is_available(),
         "local_checkpoint_exists": Path(LOCAL_CKPT).exists(),
     }
@@ -215,7 +218,7 @@ def _get_deepseek_client() -> OpenAI:
 
 def _chat_openai(messages: list[dict], max_tokens: int = 1024, temperature: float = 0.2) -> str:
     """
-    调用 OpenAI GPT-4o API。
+    调用 OpenAI GPT-4o API（最终兜底）。
     
     Args:
         messages: 对话消息列表
@@ -234,7 +237,7 @@ def _chat_openai(messages: list[dict], max_tokens: int = 1024, temperature: floa
 
 def _chat_deepseek(messages: list[dict], max_tokens: int = 1024, temperature: float = 0.2) -> str:
     """
-    调用 DeepSeek API（兜底方案）。
+    调用 DeepSeek API（首选云端后端）。
     
     Args:
         messages: 对话消息列表
@@ -251,6 +254,13 @@ def _chat_deepseek(messages: list[dict], max_tokens: int = 1024, temperature: fl
     return response.choices[0].message.content.strip()
 
 
+def _cloud_backend_candidates():
+    return (
+        ("DeepSeek", bool(settings.DEEPSEEK_API_KEY), _chat_deepseek),
+        ("OpenAI GPT-4o", bool(settings.OPENAI_API_KEY), _chat_openai),
+    )
+
+
 # ── 统一入口（带 fallback 链）────────────────────────────────────────────
 
 def chat(
@@ -261,7 +271,8 @@ def chat(
     """
     统一 LLM 调用接口，带四级 fallback 机制。
     
-    调用链：本地 LoRA 模型 → 远端 GPU LoRA 服务 → OpenAI GPT-4o → DeepSeek
+    默认调用链：本地 LoRA 模型 → DeepSeek → OpenAI GPT-4o
+    远端 GPU LoRA 服务仅在 LLM_BACKEND_MODE=remote 时启用。
     
     Args:
         messages: 对话消息列表，格式：
@@ -284,7 +295,7 @@ def chat(
     global _local_fail_count, _remote_fail_count
     backend_mode = _backend_mode()
     allow_local = backend_mode in {"auto", "local"}
-    allow_remote = backend_mode in {"auto", "remote"}
+    allow_remote = backend_mode == "remote"
     allow_cloud = backend_mode in {"auto", "local", "remote", "cloud"}
 
     # ── 1. 本地 LoRA 模型 ────────────────────────────────────────────────
@@ -303,7 +314,7 @@ def chat(
     elif allow_local:
         logger.debug("[LLM] Local model skipped (too many failures), using cloud.")
 
-    # ── 2. 远端 GPU LoRA 服务 ───────────────────────────────────────────
+    # ── 2. 远端 GPU LoRA 服务（仅 remote 模式）───────────────────────────
     if allow_remote and _remote_backend_configured():
         if _remote_fail_count < MAX_REMOTE_FAILURES:
             try:
@@ -327,19 +338,29 @@ def chat(
             f"LLM_BACKEND_MODE={backend_mode!r} currently disables cloud fallback."
         )
 
-    # ── 3. OpenAI GPT-4o ────────────────────────────────────────────────
-    try:
-        result = _chat_openai(messages, max_tokens=max_tokens, temperature=temperature)
-        logger.info("[LLM] Response from OpenAI GPT-4o.")
-        return result
-    except Exception as e:
-        logger.warning(f"[LLM] OpenAI failed: {e}, falling back to DeepSeek.")
+    # ── 3. 云端后端：DeepSeek → OpenAI ────────────────────────────────────
+    last_error = None
+    any_cloud_backend_configured = False
 
-    # ── 4. DeepSeek（最后兜底）──────────────────────────────────────────
-    try:
-        result = _chat_deepseek(messages, max_tokens=max_tokens, temperature=temperature)
-        logger.info("[LLM] Response from DeepSeek.")
-        return result
-    except Exception as e:
-        logger.error(f"[LLM] All LLM backends failed. Last error: {e}")
-        raise RuntimeError("All LLM backends failed.") from e
+    for backend_name, is_configured, backend_func in _cloud_backend_candidates():
+        if not is_configured:
+            logger.debug(f"[LLM] {backend_name} skipped (not configured).")
+            continue
+
+        any_cloud_backend_configured = True
+        try:
+            result = backend_func(messages, max_tokens=max_tokens, temperature=temperature)
+            logger.info(f"[LLM] Response from {backend_name}.")
+            return result
+        except Exception as e:
+            last_error = e
+            logger.warning(f"[LLM] {backend_name} failed: {e}")
+
+    if not any_cloud_backend_configured:
+        raise RuntimeError(
+            "No cloud LLM backend configured. "
+            "Set DEEPSEEK_API_KEY or OPENAI_API_KEY for fallback access."
+        )
+
+    logger.error(f"[LLM] All LLM backends failed. Last error: {last_error}")
+    raise RuntimeError("All LLM backends failed.") from last_error

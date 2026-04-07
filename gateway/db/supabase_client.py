@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from dotenv import load_dotenv
+from httpx import Client as HttpxClient, Timeout
 from supabase import create_client, Client
+from supabase.lib.client_options import SyncClientOptions
 
 # 从项目根目录（当前文件向上两级）加载 .env 文件
 # Path(__file__) 是当前文件的绝对路径，.parents[2] 回溯两层到项目根
@@ -11,6 +13,18 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 # 模块级单例变量，初始为 None，首次调用 get_client() 时才真正创建连接
 _client: Client | None = None
+_httpx_client: HttpxClient | None = None
+
+
+def _build_client_options() -> SyncClientOptions:
+    """Provide an explicit shared httpx client to avoid deprecated implicit kwargs."""
+    global _httpx_client
+    if _httpx_client is None:
+        _httpx_client = HttpxClient(
+            timeout=Timeout(30.0),
+            follow_redirects=True,
+        )
+    return SyncClientOptions(httpx_client=_httpx_client)
 
 
 def _read_env(name: str) -> str:
@@ -58,7 +72,11 @@ def get_client() -> Client:
             raise RuntimeError("SUPABASE_URL and one of [SUPABASE_API_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KEY] must be set in .env")
         url = _validate_url("SUPABASE_URL", url)
         try:
-            _client = create_client(url, key)        # 创建并缓存客户端，后续调用直接复用
+            _client = create_client(                # 创建并缓存客户端，后续调用直接复用
+                url,
+                key,
+                options=_build_client_options(),
+            )
         except Exception as exc:
             raise RuntimeError(
                 "Failed to initialize Supabase client "

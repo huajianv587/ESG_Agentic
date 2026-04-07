@@ -151,7 +151,7 @@ def create_visualizations(results: List[Dict[str, Any]], output_dir: Path, check
     box_data = [rouge_scores]
     box_labels = ['ROUGE-L']
     
-    bp = plt.boxplot(box_data, labels=box_labels, patch_artist=True, showmeans=True)
+    bp = plt.boxplot(box_data, tick_labels=box_labels, patch_artist=True, showmeans=True)
     bp['boxes'][0].set_facecolor('lightblue')
     bp['medians'][0].set_color('red')
     bp['means'][0].set_color('green')

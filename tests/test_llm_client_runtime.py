@@ -47,12 +47,19 @@ def test_chat_remote_uses_configured_service(monkeypatch):
     assert captured["timeout"] == 42
 
 
-def test_chat_prefers_remote_service_before_cloud_fallback(monkeypatch):
+def test_chat_prefers_deepseek_before_remote_and_openai_in_auto_mode(monkeypatch):
     monkeypatch.setattr(llm_client, "_local_fail_count", llm_client.MAX_LOCAL_FAILURES)
     monkeypatch.setattr(llm_client, "_remote_fail_count", 0)
     monkeypatch.setattr(llm_client.settings, "LLM_BACKEND_MODE", "auto")
     monkeypatch.setattr(llm_client.settings, "REMOTE_LLM_URL", "http://127.0.0.1:8010")
-    monkeypatch.setattr(llm_client, "_chat_remote", lambda messages, max_tokens, temperature: "remote-answer")
+    monkeypatch.setattr(llm_client.settings, "DEEPSEEK_API_KEY", "deepseek-key")
+    monkeypatch.setattr(llm_client.settings, "OPENAI_API_KEY", "openai-key")
+    monkeypatch.setattr(
+        llm_client,
+        "_chat_remote",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Remote backend should not run in auto mode")),
+    )
+    monkeypatch.setattr(llm_client, "_chat_deepseek", lambda messages, max_tokens, temperature: "deepseek-answer")
     monkeypatch.setattr(
         llm_client,
         "_chat_openai",
@@ -65,7 +72,29 @@ def test_chat_prefers_remote_service_before_cloud_fallback(monkeypatch):
         max_tokens=128,
     )
 
-    assert result == "remote-answer"
+    assert result == "deepseek-answer"
+
+
+def test_chat_falls_back_to_openai_after_deepseek_failure(monkeypatch):
+    monkeypatch.setattr(llm_client, "_local_fail_count", llm_client.MAX_LOCAL_FAILURES)
+    monkeypatch.setattr(llm_client, "_remote_fail_count", 0)
+    monkeypatch.setattr(llm_client.settings, "LLM_BACKEND_MODE", "auto")
+    monkeypatch.setattr(llm_client.settings, "DEEPSEEK_API_KEY", "deepseek-key")
+    monkeypatch.setattr(llm_client.settings, "OPENAI_API_KEY", "openai-key")
+    monkeypatch.setattr(
+        llm_client,
+        "_chat_deepseek",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("deepseek unavailable")),
+    )
+    monkeypatch.setattr(llm_client, "_chat_openai", lambda messages, max_tokens, temperature: "openai-answer")
+
+    result = llm_client.chat(
+        [{"role": "user", "content": "Summarize Grab social commitments."}],
+        temperature=0.2,
+        max_tokens=128,
+    )
+
+    assert result == "openai-answer"
 
 
 def test_chat_remote_mode_skips_local_backend(monkeypatch):
@@ -100,4 +129,6 @@ def test_runtime_backend_status_reports_mode(monkeypatch):
     assert status["app_mode"] == "hybrid"
     assert status["llm_backend_mode"] == "remote"
     assert status["remote_llm_configured"] is True
+    assert status["remote_llm_enabled_in_mode"] is True
+    assert status["cloud_fallback_order"] == ["deepseek", "openai"]
     assert status["local_llm_cuda_available"] is False

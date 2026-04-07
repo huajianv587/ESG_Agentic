@@ -1,5 +1,8 @@
 # Staging And Release Runbook
 
+For customer-facing deployment and acceptance handoff, use
+`docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md` as the primary checklist.
+
 ## Staging Startup
 
 ### 1. Preflight
@@ -32,6 +35,7 @@ python scripts/staging_check.py up --skip-build --require-module rag --require-m
 ```bash
 docker compose ps
 curl http://localhost:8000/health
+curl http://localhost:8000/health/ready
 curl http://localhost:8000/dashboard/overview
 curl http://localhost/health
 ```
@@ -79,6 +83,7 @@ docker compose down -v
 - `python scripts/staging_check.py preflight` passes on the target host
 - `docker compose up -d --build` succeeds without unhealthy services
 - `/health` returns `200`
+- `/health/ready` returns `200`
 - `/dashboard/overview` returns `200`
 - `/agent/analyze` works with a real staging prompt
 - `/admin/reports/generate` works with a real staging request
