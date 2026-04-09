@@ -1,15 +1,116 @@
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 from gateway.api.schemas import AnalyzeRequest, ESGScoreRequest, QueryRequest, QueryResponse
 from gateway.app_runtime import runtime
+from gateway.config import settings
+from gateway.utils.llm_client import chat
 from gateway.utils.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+def _strip_code_fences(raw: str) -> str:
+    text = (raw or "").strip()
+    if not text.startswith("```"):
+        return text
+
+    lines = text.splitlines()
+    if lines and lines[-1].strip() == "```":
+        lines = lines[1:-1]
+    else:
+        lines = lines[1:]
+    return "\n".join(lines).strip()
+
+
+def _coerce_score(value: object, default: int = 65) -> int:
+    try:
+        score = int(round(float(value)))
+    except (TypeError, ValueError):
+        score = default
+    return max(0, min(100, score))
+
+
+def _normalize_fast_demo_payload(raw: str, question: str) -> dict:
+    cleaned = _strip_code_fences(raw)
+
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        parsed = {
+            "answer": cleaned or "Fast demo answer unavailable.",
+            "analysis_summary": "Generated from cloud LLM without RAG grounding.",
+            "confidence": 0.68,
+            "esg_scores": {},
+        }
+
+    answer = str(parsed.get("answer") or cleaned or "Fast demo answer unavailable.").strip()
+    summary = str(parsed.get("analysis_summary") or "").strip()
+    confidence = parsed.get("confidence", 0.68)
+
+    try:
+        confidence = float(confidence)
+    except (TypeError, ValueError):
+        confidence = 0.68
+    confidence = max(0.0, min(1.0, confidence))
+
+    score_payload = parsed.get("esg_scores") or {}
+    esg_scores = {
+        "e_score": _coerce_score(score_payload.get("e_score"), 68),
+        "s_score": _coerce_score(score_payload.get("s_score"), 64),
+        "g_score": _coerce_score(score_payload.get("g_score"), 70),
+    }
+    esg_scores["overall_score"] = _coerce_score(
+        score_payload.get("overall_score"),
+        round((esg_scores["e_score"] + esg_scores["s_score"] + esg_scores["g_score"]) / 3),
+    )
+
+    if not summary:
+        summary = f"Fast demo response generated for: {question[:80]}"
+
+    return {
+        "answer": answer.replace("\n", "<br>"),
+        "analysis_summary": summary,
+        "confidence": confidence,
+        "esg_scores": esg_scores,
+    }
+
+
+def _run_fast_demo_analysis(question: str) -> dict:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an ESG demo copilot. Return valid JSON only. "
+                "Use the same language as the user. "
+                "Provide a concise presentation-friendly response for a live demo. "
+                "When precise retrieved evidence is unavailable, frame the output as a fast estimate "
+                "based on general ESG knowledge and common public information. "
+                "Return this exact JSON schema: "
+                "{\"answer\": string, \"analysis_summary\": string, "
+                "\"confidence\": number, "
+                "\"esg_scores\": {\"e_score\": number, \"s_score\": number, "
+                "\"g_score\": number, \"overall_score\": number}}. "
+                "Keep confidence between 0.55 and 0.85."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Question:\n"
+                f"{question}\n\n"
+                "Make the answer easy to present in a demo. "
+                "Use short paragraphs or bullet-style lines."
+            ),
+        },
+    ]
+    raw = chat(messages, temperature=0.2, max_tokens=900)
+    return _normalize_fast_demo_payload(raw, question)
 
 
 @router.post("/session")
@@ -70,16 +171,22 @@ def analyze_esg(
         raise HTTPException(status_code=503, detail="Agent module not available")
 
     try:
-        result = runtime.run_agent(actual_question, session_id=actual_session_id)
+        if settings.DEMO_FAST_MODE:
+            logger.info("[Analyze] DEMO_FAST_MODE enabled, using direct cloud analysis path.")
+            result = _run_fast_demo_analysis(actual_question)
+            final_answer = result.get("answer", "")
+        else:
+            result = runtime.run_agent(actual_question, session_id=actual_session_id)
+            final_answer = result.get("final_answer", "")
 
         if actual_session_id and runtime.save_message:
             runtime.ensure_session(actual_session_id)
             runtime.save_message(actual_session_id, "user", actual_question)
-            runtime.save_message(actual_session_id, "assistant", result.get("final_answer", ""))
+            runtime.save_message(actual_session_id, "assistant", final_answer)
 
         return {
             "question": actual_question,
-            "answer": result.get("final_answer"),
+            "answer": final_answer,
             "esg_scores": result.get("esg_scores", {}),
             "confidence": result.get("confidence", 0),
             "analysis_summary": result.get("analysis_summary", ""),

@@ -95,5 +95,6 @@ class Settings:
 
         # ── Debug mode ─────────────────────────────────────────────────
         self.DEBUG = _env_bool("DEBUG", default=True)
+        self.DEMO_FAST_MODE = _env_bool("DEMO_FAST_MODE", default=False)
 
    

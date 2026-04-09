@@ -24,7 +24,7 @@ export function renderNav() {
     link.dataset.hoverGlow = 'true';
     link.className = `
       nav-link
-      block shrink-0 whitespace-nowrap px-4 py-3 sm:px-5 sm:py-4 rounded-2xl text-base sm:text-[17px] font-semibold
+      block shrink-0 whitespace-nowrap px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl text-[0.96rem] sm:text-[1rem] font-semibold
       transition-all duration-200 border
       ${isActive
         ? 'bg-[rgba(94,165,255,0.12)] text-[#8ec5ff] border-[rgba(94,165,255,0.3)] shadow-[0_10px_24px_rgba(0,0,0,0.12)]'
@@ -33,8 +33,8 @@ export function renderNav() {
     `;
     link.title = config.description;
     link.innerHTML = `
-      <div class="flex items-center gap-3.5">
-        <span class="text-xl">
+      <div class="flex items-center gap-3">
+        <span class="text-lg">
           ${getIconEmoji(config.icon)}
         </span>
         <span>${config.label}</span>

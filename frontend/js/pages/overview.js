@@ -4,6 +4,7 @@
  */
 
 import { api } from '../api.js';
+import { getLocale } from '../i18n.js';
 import { formatDate, relativeTime, getStorage, setStorage } from '../utils.js';
 
 let cleanup = [];
@@ -19,6 +20,13 @@ const DEFAULT_HOT_QUESTIONS = [
   '苹果与微软的社会责任对标分析',
   '最近 ESG 相关风险事件有哪些？',
   'SEC 披露规则变化会影响哪些公司？',
+];
+
+const DEFAULT_HOT_QUESTIONS_EN = [
+  'What is Tesla’s environmental policy score?',
+  'How do Apple and Microsoft compare on social responsibility?',
+  'What are the latest ESG-related risk events?',
+  'Which companies could be affected by SEC disclosure rule changes?',
 ];
 
 const COMMAND_SURFACES = [
@@ -332,9 +340,15 @@ function bindQueryConsole(container) {
 }
 
 function renderQueryInterface(container, queryData) {
-  const hotQuestions = queryData.hot_questions?.length
-    ? queryData.hot_questions
+  const fallbackQuestions = getLocale() === 'en'
+    ? DEFAULT_HOT_QUESTIONS_EN
     : DEFAULT_HOT_QUESTIONS;
+  const sourceQuestions = queryData.hot_questions?.length
+    ? queryData.hot_questions
+    : fallbackQuestions;
+  const hotQuestions = getLocale() === 'en' && sourceQuestions.some(containsChinese)
+    ? fallbackQuestions
+    : sourceQuestions;
 
   const hotList = container.querySelector('#overview-hot-questions');
   hotList.innerHTML = hotQuestions.map((question) => `
@@ -384,11 +398,24 @@ function renderMetrics(target, metrics) {
       <div class="overview-stat__label">${escapeHtml(metric.label || '')}</div>
       <div class="overview-stat__value">
         ${escapeHtml(String(metric.value ?? 0))}
-        <span class="overview-stat__suffix">${escapeHtml(metric.suffix || '')}</span>
+        <span class="overview-stat__suffix">${escapeHtml(formatMetricSuffix(metric.suffix || ''))}</span>
       </div>
       <div class="overview-stat__hint">${escapeHtml(metric.hint || '')}</div>
     </div>
   `).join('');
+}
+
+function formatMetricSuffix(suffix) {
+  const raw = String(suffix ?? '');
+  if (getLocale() !== 'en') {
+    return raw;
+  }
+
+  return {
+    '条': ' signals',
+    '个': ' entities',
+    '次': ' scans',
+  }[raw] || raw;
 }
 
 function renderSpotlight(target, spotlight) {
@@ -633,6 +660,10 @@ function recordRecentQuery(query, mode = 'chat') {
 
 function getRecentQueries() {
   return getStorage(RECENT_QUERY_KEY, []);
+}
+
+function containsChinese(value) {
+  return /[\u4e00-\u9fff]/u.test(String(value || ''));
 }
 
 function extractCompanyName(prompt) {

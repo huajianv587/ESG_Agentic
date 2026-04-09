@@ -42,11 +42,12 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
   <script>
-    window.__APP_ASSET_VERSION__ = '20260404-frontend-v7';
+    window.__APP_ASSET_VERSION__ = '20260409-frontend-v8';
+    window.__ESG_UI_LOCALE__ = localStorage.getItem('esg_ui_locale') || 'zh';
   </script>
 
   <!-- 自定义 CSS -->
-  <link rel="stylesheet" href="/app/css/app.css?v=20260404-frontend-v7">
+  <link rel="stylesheet" href="/app/css/app.css?v=20260409-frontend-v8">
 
   <style>
     :root {
@@ -85,14 +86,18 @@
     <aside id="sidebar" class="app-sidebar">
       <!-- Logo 区域 -->
       <div id="nav-logo" class="app-sidebar__brand">
-        <div class="flex items-center gap-4">
-          <div class="w-11 h-11 bg-gradient-to-br from-esg-e to-esg-s rounded-2xl flex items-center justify-center font-bold text-lg text-[#0B0F1A] shadow-lg">
+        <div class="app-brand">
+          <div class="app-brand__mark">
             E
           </div>
-          <div class="flex flex-col">
-            <span class="font-bold text-xl tracking-wide">ESG Copilot</span>
-            <span class="text-base text-[var(--text-muted)] mt-0.5">企业 ESG 分析平台</span>
+          <div class="app-brand__copy">
+            <span class="app-brand__title">ESG Copilot</span>
+            <span class="app-brand__subtitle">企业 ESG 分析平台</span>
           </div>
+        </div>
+        <div id="language-switcher" class="lang-switch" data-no-i18n="true" aria-label="Language Switcher">
+          <button type="button" class="lang-switch__btn" data-locale="en">ENG</button>
+          <button type="button" class="lang-switch__btn" data-locale="zh">中文</button>
         </div>
       </div>
 
@@ -135,10 +140,10 @@
   <!-- 弹窗容器 -->
   <div id="modal-container"></div>
 
-  <script src="/app/app-config.js?v=20260404-frontend-v7"></script>
+  <script src="/app/app-config.js?v=20260409-frontend-v8"></script>
 
   <!-- 应用入口 (ES Module) -->
-  <script type="module" src="/app/js/app.js?v=20260404-frontend-v7"></script>
+  <script type="module" src="/app/js/app.js?v=20260409-frontend-v8"></script>
 
 </body>
 </html>

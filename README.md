@@ -1,56 +1,66 @@
 # ESG Agentic RAG Copilot
 
-Enterprise ESG analysis and monitoring platform built with FastAPI, LangGraph, Qdrant, Supabase, and a local-first / cloud-fallback LLM runtime.
+Enterprise ESG analysis, scoring, monitoring, and reporting platform built with FastAPI, LangGraph, Qdrant, Supabase, and a local-first / cloud-fallback LLM runtime.
 
-This README is intentionally bilingual:
+This README is bilingual:
 
-- English first
-- 中文 second
+- English version first
+- 中文版本 second
 
 ---
 
-# English
+# English Version
 
-## 1. Overview
+## 1. Project Overview
 
-ESG Agentic RAG Copilot is a product-oriented ESG intelligence system for:
+ESG Agentic RAG Copilot is a product-oriented ESG intelligence platform designed for:
 
 - ESG question answering
 - company-level ESG scoring
-- retrieval-augmented report analysis
-- proactive event monitoring
+- RAG-enhanced report and evidence analysis
+- proactive ESG event monitoring
 - scheduled report generation
-- customer-facing dashboard delivery
+- dashboard-style customer demos and delivery
 
-It supports both reactive workflows, where a user asks a question, and proactive workflows, where the system scans, scores, and pushes ESG signals.
+The system supports both:
 
-## 2. Current Delivery Baseline
+- reactive workflows, where a user asks a question and gets an answer or score
+- proactive workflows, where the platform scans signals, evaluates risk, and generates reports
 
-This repository is currently prepared for product delivery with the following baseline:
+## 2. Current Status
 
-- `APP_MODE=local`
-- `LLM_BACKEND_MODE=auto`
-- default LLM order: `Local -> DeepSeek -> OpenAI`
-- remote GPU / 5090 is optional and not required for current delivery
+This repository is currently prepared for two practical usage modes:
 
-Important behavior:
+### Fast demo mode
 
-- If no local CUDA runtime is available, the local generation backend is skipped automatically.
-- In CPU-only environments, the practical response path becomes `DeepSeek -> OpenAI`.
-- Readiness is exposed through `GET /health/ready`.
-- You should not send production traffic until `/health/ready` returns `200`.
+This is the recommended path for demo recording and live presentation.
+
+- one-click start with `start.cmd`
+- uses `APP_MODE=local`
+- uses `LLM_BACKEND_MODE=cloud`
+- uses `DEMO_FAST_MODE=1`
+- bypasses the slow full RAG warm-up path for faster first response
+
+### Local-first product mode
+
+This is the fuller runtime path for local development and integration testing.
+
+- uses `APP_MODE=local`
+- uses `LLM_BACKEND_MODE=auto`
+- fallback order is typically `Local -> DeepSeek -> OpenAI`
+- may require Qdrant and longer warm-up time
 
 ## 3. What The Product Includes
 
 - FastAPI backend with modular API routers
-- LangGraph-based agent pipeline
-- Qdrant-backed RAG retrieval
-- Supabase-backed runtime data and reports
-- ESG scoring and visualization utilities
-- scheduler and reporting pipeline
+- LangGraph-based agent orchestration
+- RAG retrieval and indexing pipeline
+- Supabase-backed data and report storage
+- ESG scoring workflows and visual outputs
+- proactive scheduler and event-monitoring pipeline
 - static frontend dashboard
-- Windows local-first delivery scripts
-- deployment, smoke-test, and runtime diagnostic scripts
+- bilingual UI toggle: `ENG / 中文`
+- Windows helper scripts for setup and startup
 
 ## 4. Architecture
 
@@ -62,204 +72,288 @@ FastAPI Gateway
   |- /health
   |- /health/ready
   |- /agent/*
-  |- /admin/*
   |- /dashboard/*
+  |- /admin/*
         |
-        +--> Agentic RAG path
+        +--> Agentic ESG analysis path
         |     |- Router Agent
         |     |- Retriever Agent
         |     |- Analyst Agent
-        |     |- Verifier Agent
+        |     \- Verifier Agent
         |
-        +--> Proactive scheduler path
+        \--> Proactive scheduler path
               |- Scanner
               |- Event extractor
               |- Risk scorer
               |- Matcher
               |- Notifier
-              |- Report generator
+              \- Report generator
 
 Shared runtime services
   |- Qdrant
   |- Supabase
-  |- local / remote / cloud LLM client
+  \- local / remote / cloud LLM clients
 ```
 
 ## 5. Repository Layout
 
 ```text
 .
-|- gateway/
-|  |- api/                 # FastAPI app factory, routers, API schemas
-|  |- agents/              # LangGraph agents and ESG reasoning logic
-|  |- rag/                 # RAG indexing, retrieval, embeddings, quality filters
-|  |- scheduler/           # proactive monitoring and reporting pipeline
-|  |- db/                  # Supabase runtime access
-|  |- utils/               # LLM client, logging, cache, retry helpers
-|  |- app_runtime.py       # shared runtime context
-|  |- main.py              # thin application entry point
-|  \- Dockerfile           # backend container image
-|- frontend/               # static frontend app
-|- scripts/                # bootstrap, smoke, doctor, build, delivery helpers
-|- docs/                   # deployment and delivery documentation
-|- tests/                  # automated tests
-|- training/               # fine-tuning and evaluation utilities
-|- docker-compose.yml      # local compose stack
+|- gateway/                 # backend app, routers, runtime, agents, RAG, scheduler
+|- frontend/                # static frontend SPA
+|- scripts/                 # bootstrap, run, smoke, doctor, build helpers
+|- docs/                    # deployment and delivery documentation
+|- tests/                   # automated tests
+|- training/                # training / evaluation utilities
+|- data/                    # local runtime data and indexes
+|- dist/                    # generated static frontend and output artifacts
 |- requirements.txt
-\- .env.example
+|- package.json
+|- docker-compose.yml
+|- .env.example
+\- start.cmd                # one-click demo launcher
 ```
 
-## 6. Core Runtime Flow
+## 6. Main Frontend Pages
 
-### 6.1 Request flow
+The frontend is designed for demo and dashboard-style interaction.
 
-For a typical analysis request:
-
-1. the API receives `/agent/analyze`
-2. the router agent classifies the request
-3. the retriever agent rewrites the query and fetches context
-4. the analyst agent produces ESG analysis when needed
-5. the verifier agent checks grounding and confidence
-6. the API returns answer, confidence, and optional ESG scores
-
-### 6.2 LLM fallback flow
-
-Current behavior:
-
-- `local` or `auto`: `Local -> DeepSeek -> OpenAI`
-- `remote`: `Remote GPU -> DeepSeek -> OpenAI`
-- `cloud`: `DeepSeek -> OpenAI`
+- `Overview`: flagship summary page
+- `Chat`: ESG Q&A interface
+- `Scoring`: company ESG score generation and visualization
+- `Report Center`: report viewing and export
+- `Data Sync`: data-source and scheduler visibility
+- `Push Rules`: push-rule configuration
+- `Subscription Management`: tracked-company subscriptions
 
 ## 7. Prerequisites
 
-Minimum recommended environment:
+Recommended minimum setup:
 
+- Windows environment for the provided `.bat` scripts
 - Python `3.11+`
-- Docker Desktop or Docker Engine
-- Qdrant available on port `6333`
-- Supabase project and server-side key
-- at least one cloud fallback key:
+- `.venv` available, or permission to create one
+- `.env` configured
+- at least one cloud API key:
   - `DEEPSEEK_API_KEY`, or
   - `OPENAI_API_KEY`
 
-Recommended for current delivery:
+Optional for fuller local-first mode:
 
-- Windows with the provided `.bat` scripts
-- enough RAM for cold-start embedding warm-up
+- Docker Desktop
+- local Qdrant on port `6333`
+- Supabase project and credentials
 
 ## 8. Minimal Environment Variables
 
-Start from `.env.example` and at minimum configure:
+Start from `.env.example` and make sure at least these values are available:
 
 ```env
 APP_MODE=local
-LLM_BACKEND_MODE=auto
-
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_API_KEY=...
 
 DEEPSEEK_API_KEY=...
 OPENAI_API_KEY=...
 ```
 
-Optional only when you explicitly use remote GPU mode:
+For fuller local-first mode, the project also expects values such as:
 
 ```env
-REMOTE_LLM_URL=http://127.0.0.1:8010
-REMOTE_LLM_API_KEY=...
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_API_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+VECTOR_DB_TYPE=faiss
+VECTOR_DB_PATH=./data/vector_db
 ```
+
+Do not commit your real `.env`.
 
 ## 9. Quick Start
 
-### 9.1 Windows local-first startup
+### Option A. Fastest Demo Start
 
-This is the recommended product delivery path.
+This is the best choice if you need the app running quickly for a demo.
+
+1. Prepare the environment:
 
 ```bat
 scripts\bootstrap_local_windows.bat
+```
+
+2. Create `.env` from `.env.example` and fill in at least:
+
+- `DEEPSEEK_API_KEY`, or
+- `OPENAI_API_KEY`
+
+3. Start the demo server:
+
+```bat
+start.cmd
+```
+
+Optional custom port:
+
+```bat
+start.cmd 8012
+```
+
+What `start.cmd` does:
+
+- checks `.venv`
+- checks `.env`
+- sets `APP_MODE=local`
+- sets `LLM_BACKEND_MODE=cloud`
+- sets `DEMO_FAST_MODE=1`
+- waits for `/health`
+- automatically opens `/app`
+
+Default app URL pattern:
+
+- `http://127.0.0.1:<port>/app`
+
+Stop the server:
+
+- return to the terminal window
+- press `Ctrl + C`
+
+### Option B. Local-First Development Start
+
+Use this when you want the fuller local runtime path.
+
+1. Bootstrap Python dependencies:
+
+```bat
+scripts\bootstrap_local_windows.bat
+```
+
+2. Start local Qdrant:
+
+```bat
 scripts\start_local_qdrant_windows.bat
+```
+
+3. Start the API:
+
+```bat
 scripts\run_local_first_windows.bat
 ```
 
-Then wait for readiness:
+4. Check health:
 
 ```bat
+curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/health/ready
 ```
 
-When it returns `200`, open:
+5. Open:
 
 - app: `http://127.0.0.1:8000/app`
-- API docs: `http://127.0.0.1:8000/docs`
+- docs: `http://127.0.0.1:8000/docs`
 
-### 9.2 Docker Compose
+### Option C. Demo Fast Script Without One-Click Browser Launch
 
-```bash
-docker compose up -d qdrant
-docker compose up -d
+```bat
+scripts\run_demo_fast_windows.bat
 ```
 
-Check readiness:
+This starts the API in fast demo mode on port `8000` with reload enabled.
 
-```bash
-curl http://127.0.0.1:8000/health/ready
-```
+## 10. Frontend Build
 
-### 9.3 Static frontend build
+To build the static frontend bundle:
 
 ```bash
 npm run build:static
 ```
 
-This writes the static bundle to `dist/`.
+Output directory:
 
-## 10. Health And Readiness
+- `dist/`
+
+## 11. Main Runtime Modes
+
+### `LLM_BACKEND_MODE=cloud`
+
+- direct cloud response path
+- fastest for demo use
+- practical fallback order: `DeepSeek -> OpenAI`
+
+### `LLM_BACKEND_MODE=auto`
+
+- local-first behavior
+- intended fallback order: `Local -> DeepSeek -> OpenAI`
+- local model may be skipped automatically if CUDA is unavailable
+
+### `DEMO_FAST_MODE=1`
+
+- skips the heavy background RAG initialization path
+- improves first-response speed for demos
+- recommended for presentation and video recording
+
+## 12. Health And Readiness
 
 ### `GET /health`
 
 Use this for liveness and general runtime inspection.
 
-It returns:
+It returns information such as:
 
 - runtime mode
-- backend fallback order
-- module flags
-- general service status
+- active backend mode
+- cloud fallback order
+- module status
 
 ### `GET /health/ready`
 
-Use this for production readiness.
+Use this for readiness checks.
 
-It returns `200` only when the required runtime modules are ready, including:
+- returns `200` when required runtime modules are ready
+- may return `503` while the system is still warming up
 
-- RAG
-- ESG scorer
-- report scheduler
+In fast demo mode, `/health` is the more useful check because full readiness may intentionally stay incomplete.
 
-If readiness is not complete yet, it returns `503`.
+## 13. Main API Endpoints
 
-## 11. Cold Start And Warm-Up Notes
+Important product endpoints include:
 
-This project has a real warm-up phase on cold start.
+- `POST /agent/analyze`
+- `POST /agent/esg-score`
+- `GET /dashboard/overview`
+- `POST /admin/reports/generate`
+- `POST /admin/data-sources/sync`
+- `GET /health`
+- `GET /health/ready`
 
-Typical reasons:
+See also:
 
-- loading the persisted Qdrant-backed index
-- restoring large docstore metadata
-- loading the local embedding model
-- starting the reporting scheduler
+- [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md)
 
-Operational guidance:
+## 14. Key Scripts
 
-- start the service first
-- wait until `/health/ready` returns `200`
-- only then attach traffic through Nginx / domain / reverse proxy
+### Setup and startup
 
-If you skip this, the first real request may wait several minutes.
+- `start.cmd`
+- `scripts/bootstrap_local_windows.bat`
+- `scripts/run_demo_fast_windows.bat`
+- `scripts/run_local_first_windows.bat`
+- `scripts/run_local_hybrid_windows.bat`
+- `scripts/start_local_qdrant_windows.bat`
 
-## 12. Common Commands
+### Diagnostics and validation
 
-### Full test suite
+- `scripts/local_api_smoke.py`
+- `scripts/runtime_doctor.py`
+- `scripts/staging_check.py`
+- `scripts/rag_quality_check.py`
+
+### Maintenance and document generation
+
+- `scripts/rebuild_rag_index.py`
+- `scripts/generate_customer_delivery_doc.py`
+- `scripts/build_static_frontend.mjs`
+
+## 15. Common Commands
+
+### Run tests
 
 ```bash
 python -m pytest -q
@@ -277,161 +371,140 @@ python scripts/runtime_doctor.py
 python scripts/local_api_smoke.py --app-mode local --llm-backend-mode auto
 ```
 
-### Staging preflight
+### Build static frontend
 
 ```bash
-python scripts/staging_check.py preflight
+npm run build:static
 ```
 
-### Generate the customer delivery document
+## 16. Troubleshooting
 
-```bash
-python scripts/generate_customer_delivery_doc.py
-```
+### `start.cmd` opens the browser but the page says connection refused
 
-Output:
+This usually means the browser opened before the backend was fully ready.
 
-- `dist/ESG_Agentic_RAG_Copilot_客户交付说明_2026-04-07.docx`
+Current `start.cmd` now waits for `/health` before opening `/app`, but if you still see this:
 
-## 13. Key Scripts
+1. wait a few more seconds
+2. refresh the page
+3. check `http://127.0.0.1:<port>/health`
+4. restart the script if necessary
 
-### Delivery / runtime
+### The page opens but `/health/ready` is still `503`
 
-- `scripts/bootstrap_local_windows.bat`
-- `scripts/start_local_qdrant_windows.bat`
-- `scripts/run_local_first_windows.bat`
-- `scripts/run_local_hybrid_windows.bat`
-- `scripts/local_api_smoke.py`
-- `scripts/runtime_doctor.py`
-- `scripts/staging_check.py`
+That can be normal in full local mode while:
 
-### RAG / maintenance
+- Qdrant is warming up
+- the RAG index is being restored
+- the scheduler is starting
 
-- `scripts/rebuild_rag_index.py`
-- `scripts/rag_quality_check.py`
+### The local model never runs
 
-### Delivery docs
+That is expected on CPU-only hosts.
 
-- `scripts/generate_customer_delivery_doc.py`
+In that case the system falls back to cloud providers.
 
-## 14. API Highlights
+### English mode still shows some Chinese
 
-Main product endpoints:
+Refresh the page with `Ctrl + F5` to force the newest frontend assets.
 
-- `POST /agent/analyze`
-- `POST /agent/esg-score`
-- `GET /dashboard/overview`
-- `POST /admin/reports/generate`
-- `POST /admin/data-sources/sync`
-- `GET /health`
-- `GET /health/ready`
+The frontend uses versioned JS/CSS assets, but browser cache can still make old tabs look stale.
 
-See:
+## 17. Demo Notes
 
-- [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md)
+For demo recording, use:
 
-## 15. Product Delivery Docs
+- `start.cmd`
 
-Use these documents during handoff and deployment:
+Recommended flow:
 
-- [docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md](docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md)
+1. open `Overview`
+2. show `ENG / 中文` toggle
+3. enter `Chat`
+4. ask a fast ESG question
+5. open `Scoring`
+6. generate a company score
+7. open `Report Center`
+
+## 18. Related Documents
+
+- [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)
 - [docs/STAGING_RELEASE_RUNBOOK.md](docs/STAGING_RELEASE_RUNBOOK.md)
 - [docs/LOCAL_HYBRID_RUNBOOK.md](docs/LOCAL_HYBRID_RUNBOOK.md)
 - [docs/LOCAL_HYBRID_RUNBOOK_ZH.md](docs/LOCAL_HYBRID_RUNBOOK_ZH.md)
 - [docs/REMOTE_GPU_RUNBOOK.md](docs/REMOTE_GPU_RUNBOOK.md)
-- [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)
+- [docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md](docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md)
 
-## 16. Troubleshooting
-
-### Qdrant is running in Docker Desktop, but the app still cannot connect
-
-Make sure you are using the compose-managed Qdrant with port mapping:
-
-- expected host port: `6333`
-- expected active container: `esg-qdrant`
-
-The helper script `scripts/start_local_qdrant_windows.bat` will stop a standalone container named `qdrant` if it is blocking port `6333`.
-
-### `/health` is OK but `/health/ready` is still `503`
-
-This usually means one or more runtime modules are still warming up.
-
-Wait longer and check:
-
-- Qdrant connectivity
-- local embedding model warm-up
-- docstore restore
-
-### Local model never runs
-
-That is expected on CPU-only hosts.
-
-In that case the runtime falls back to:
-
-- `DeepSeek -> OpenAI`
-
-### First analysis request is slow
-
-That usually means:
-
-- the service was queried before readiness completed, or
-- the embedding model was loaded for the first time
-
-## 17. Security Notes
-
-- never commit your real `.env`
-- keep server-side Supabase keys out of frontend delivery
-- restrict `CORS_ORIGINS` in production
-- rotate API keys regularly
-
-## 18. License
+## 19. License
 
 MIT
 
 ---
 
-# 中文
+# 中文版本
 
 ## 1. 项目简介
 
-ESG Agentic RAG Copilot 是一个面向产品交付的 ESG 智能分析平台，覆盖：
+ESG Agentic RAG Copilot 是一个面向产品演示、分析交付和本地开发的 ESG 智能平台，主要能力包括：
 
 - ESG 问答分析
 - 公司级 ESG 评分
-- 基于检索增强的报告理解
-- 主动式事件监测
+- 基于 RAG 的报告与证据检索分析
+- 主动式 ESG 风险事件监测
 - 定时报表生成
-- 面向客户交付的看板与接口
+- 可用于演示和交付的仪表盘前端
 
-它既支持用户主动提问，也支持系统主动扫描、评分、推送和出报告。
+系统同时支持两类工作流：
 
-## 2. 当前交付基线
+- 被动式工作流：用户提问，系统返回回答或评分
+- 主动式工作流：系统持续扫描信号、评估风险、生成报告
 
-当前仓库已经按产品交付口径整理为以下默认基线：
+## 2. 当前状态
 
-- `APP_MODE=local`
-- `LLM_BACKEND_MODE=auto`
-- 默认大模型顺序：`本地模型 -> DeepSeek -> OpenAI`
-- 远端 GPU / 5090 不是本次交付前置条件，只保留为后续增强方案
+这个仓库目前已经整理成两种最实用的运行方式：
 
-需要特别注意：
+### 快速 Demo 模式
 
-- 如果本机没有 CUDA，本地生成后端会自动跳过。
-- 在纯 CPU 环境下，实际回答链路通常会变成 `DeepSeek -> OpenAI`。
-- 生产就绪检查使用 `GET /health/ready`。
-- 正式接流量之前，必须等 `/health/ready` 返回 `200`。
+这是当前最推荐的启动方式，适合：
+
+- 录 demo 视频
+- 现场演示
+- 快速验证页面和问答流程
+
+特点：
+
+- 使用 `start.cmd` 一键启动
+- 使用 `APP_MODE=local`
+- 使用 `LLM_BACKEND_MODE=cloud`
+- 使用 `DEMO_FAST_MODE=1`
+- 跳过完整 RAG 冷启动链路，优先保证响应速度
+
+### 本地优先产品模式
+
+这是更完整的本地运行链路，适合：
+
+- 本地开发
+- 接口联调
+- 更接近完整产品流程的测试
+
+特点：
+
+- 使用 `APP_MODE=local`
+- 使用 `LLM_BACKEND_MODE=auto`
+- 典型回退顺序为：`本地模型 -> DeepSeek -> OpenAI`
+- 可能需要 Qdrant，并且冷启动时间更长
 
 ## 3. 产品能力范围
 
-- 基于 FastAPI 的后端 API
-- 基于 LangGraph 的 Agent 推理链路
-- 基于 Qdrant 的 RAG 检索
-- 基于 Supabase 的运行时数据与报表存储
-- ESG 评分与可视化能力
-- 主动扫描与报表调度能力
-- 静态前端看板
-- 面向 Windows 的本地优先交付脚本
-- 部署、烟测、体检和交付辅助脚本
+- 基于 FastAPI 的后端接口层
+- 基于 LangGraph 的 Agent 编排
+- RAG 检索与索引流程
+- Supabase 数据和报告存储
+- ESG 评分与可视化
+- 主动式扫描与调度管线
+- 静态前端 SPA
+- 前端中英文切换：`ENG / 中文`
+- Windows 本地启动和辅助脚本
 
 ## 4. 系统架构
 
@@ -443,10 +516,10 @@ FastAPI Gateway
   |- /health
   |- /health/ready
   |- /agent/*
-  |- /admin/*
   |- /dashboard/*
+  |- /admin/*
      |
-     +--> Agentic RAG 分析链路
+     +--> Agentic ESG 分析链路
      |     |- Router Agent
      |     |- Retriever Agent
      |     |- Analyst Agent
@@ -463,185 +536,270 @@ FastAPI Gateway
 共享运行时能力
   |- Qdrant
   |- Supabase
-  \- 本地 / 远端 / 云端 LLM 客户端
+  \- 本地 / 远程 / 云端 LLM 客户端
 ```
 
 ## 5. 仓库结构
 
 ```text
 .
-|- gateway/
-|  |- api/                 # FastAPI 工厂、路由、接口 schema
-|  |- agents/              # LangGraph Agent 与 ESG 推理逻辑
-|  |- rag/                 # RAG 索引、检索、embedding、质量过滤
-|  |- scheduler/           # 主动监控与报表调度
-|  |- db/                  # Supabase 运行时访问
-|  |- utils/               # LLM、日志、缓存、重试等通用工具
-|  |- app_runtime.py       # 共享运行时上下文
-|  |- main.py              # 轻量主入口
-|  \- Dockerfile           # 后端镜像
-|- frontend/               # 静态前端
-|- scripts/                # 初始化、烟测、体检、构建、交付脚本
-|- docs/                   # 部署与交付文档
-|- tests/                  # 自动化测试
-|- training/               # 微调与评估工具
-|- docker-compose.yml      # 本地 compose 编排
+|- gateway/                 # 后端应用、路由、运行时、Agent、RAG、调度
+|- frontend/                # 静态前端 SPA
+|- scripts/                 # 安装、启动、构建、体检、烟测脚本
+|- docs/                    # 部署与交付文档
+|- tests/                   # 自动化测试
+|- training/                # 训练与评估工具
+|- data/                    # 本地数据和索引
+|- dist/                    # 构建产物和输出文件
 |- requirements.txt
-\- .env.example
+|- package.json
+|- docker-compose.yml
+|- .env.example
+\- start.cmd                # 一键 demo 启动脚本
 ```
 
-## 6. 运行链路说明
+## 6. 主要前端页面
 
-### 6.1 分析请求链路
+前端目前面向演示和可视化交付设计，主要页面包括：
 
-一次典型的 `/agent/analyze` 请求会经过：
+- `Overview`：总览页
+- `Chat`：ESG 对话页
+- `Scoring`：企业 ESG 评分页
+- `Report Center`：报告中心
+- `Data Sync`：数据同步与调度状态
+- `Push Rules`：推送规则
+- `Subscription Management`：订阅管理
 
-1. API 接收问题
-2. Router Agent 做问题分类
-3. Retriever Agent 改写查询并检索上下文
-4. 需要时由 Analyst Agent 产出 ESG 分析
-5. Verifier Agent 做 grounded / confidence 校验
-6. 返回答案、置信度和可选 ESG 评分
-
-### 6.2 LLM 回退链路
-
-当前行为如下：
-
-- `local` 或 `auto`：`本地 -> DeepSeek -> OpenAI`
-- `remote`：`远端 GPU -> DeepSeek -> OpenAI`
-- `cloud`：`DeepSeek -> OpenAI`
-
-## 7. 环境前置要求
+## 7. 环境要求
 
 建议最小环境：
 
+- Windows 环境，便于直接使用 `.bat` 脚本
 - Python `3.11+`
-- Docker Desktop 或 Docker Engine
-- `6333` 端口可访问的 Qdrant
-- 已创建的 Supabase 项目
-- 至少一个云端兜底密钥：
+- 已有 `.venv`，或者允许脚本创建 `.venv`
+- 已配置 `.env`
+- 至少一个云端 API Key：
   - `DEEPSEEK_API_KEY`
   - 或 `OPENAI_API_KEY`
 
-当前交付最推荐：
+如需更完整的本地优先运行：
 
-- Windows 环境
-- 使用仓库内 `.bat` 启动脚本
-- 具备足够内存用于冷启动预热
+- Docker Desktop
+- 本地可访问的 Qdrant，端口 `6333`
+- Supabase 项目及相关密钥
 
 ## 8. 最小环境变量
 
-从 `.env.example` 复制后，至少配置以下项：
+请从 `.env.example` 复制生成 `.env`，并至少保证下面这些值存在：
 
 ```env
 APP_MODE=local
-LLM_BACKEND_MODE=auto
-
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_API_KEY=...
 
 DEEPSEEK_API_KEY=...
 OPENAI_API_KEY=...
 ```
 
-只有在你明确启用远端 GPU 模式时，才需要：
+如果你要运行更完整的本地优先链路，通常还需要：
 
 ```env
-REMOTE_LLM_URL=http://127.0.0.1:8010
-REMOTE_LLM_API_KEY=...
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_API_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+VECTOR_DB_TYPE=faiss
+VECTOR_DB_PATH=./data/vector_db
 ```
+
+不要把真实 `.env` 提交到仓库。
 
 ## 9. 快速开始
 
-### 9.1 Windows 本地优先启动
+### 方式 A：最快 Demo 启动
 
-这是当前产品交付的推荐路径。
+如果你的目标是尽快打开网页开始演示，推荐这一种。
+
+1. 先准备 Python 环境：
 
 ```bat
 scripts\bootstrap_local_windows.bat
+```
+
+2. 复制 `.env.example` 为 `.env`，并至少填写：
+
+- `DEEPSEEK_API_KEY`
+- 或 `OPENAI_API_KEY`
+
+3. 一键启动：
+
+```bat
+start.cmd
+```
+
+如果你想指定端口：
+
+```bat
+start.cmd 8012
+```
+
+`start.cmd` 会自动做这些事：
+
+- 检查 `.venv`
+- 检查 `.env`
+- 设置 `APP_MODE=local`
+- 设置 `LLM_BACKEND_MODE=cloud`
+- 设置 `DEMO_FAST_MODE=1`
+- 等待 `/health` 可访问
+- 自动打开 `/app`
+
+访问地址格式：
+
+- `http://127.0.0.1:<端口>/app`
+
+停止服务：
+
+- 回到启动它的终端窗口
+- 按 `Ctrl + C`
+
+### 方式 B：本地优先完整模式
+
+如果你想跑更完整的本地链路，使用下面这组命令。
+
+1. 安装依赖：
+
+```bat
+scripts\bootstrap_local_windows.bat
+```
+
+2. 启动本地 Qdrant：
+
+```bat
 scripts\start_local_qdrant_windows.bat
+```
+
+3. 启动 API：
+
+```bat
 scripts\run_local_first_windows.bat
 ```
 
-然后等待就绪：
+4. 检查健康状态：
 
 ```bat
+curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/health/ready
 ```
 
-当它返回 `200` 后，访问：
+5. 打开：
 
-- 应用页面：`http://127.0.0.1:8000/app`
-- API 文档：`http://127.0.0.1:8000/docs`
+- 页面：`http://127.0.0.1:8000/app`
+- 接口文档：`http://127.0.0.1:8000/docs`
 
-### 9.2 Docker Compose 启动
+### 方式 C：仅启动快速 Demo API
 
-```bash
-docker compose up -d qdrant
-docker compose up -d
+```bat
+scripts\run_demo_fast_windows.bat
 ```
 
-检查就绪状态：
+这个脚本会在 `8000` 端口启动快速 demo 模式，并开启 `reload`。
 
-```bash
-curl http://127.0.0.1:8000/health/ready
-```
+## 10. 前端构建
 
-### 9.3 静态前端构建
+构建静态前端：
 
 ```bash
 npm run build:static
 ```
 
-构建产物会输出到 `dist/`。
+输出目录：
 
-## 10. 健康检查与就绪检查
+- `dist/`
+
+## 11. 主要运行模式说明
+
+### `LLM_BACKEND_MODE=cloud`
+
+- 直接走云端回答链路
+- 最适合 demo 和演示
+- 实际回退顺序通常为：`DeepSeek -> OpenAI`
+
+### `LLM_BACKEND_MODE=auto`
+
+- 本地优先模式
+- 目标顺序为：`本地模型 -> DeepSeek -> OpenAI`
+- 如果没有 CUDA，本地模型可能会自动跳过
+
+### `DEMO_FAST_MODE=1`
+
+- 跳过沉重的后台 RAG 初始化过程
+- 明显提升首问速度
+- 适合录视频和现场演示
+
+## 12. 健康检查与就绪检查
 
 ### `GET /health`
 
-用于存活检查和运行时状态查看。
+用于检查服务是否存活，以及查看运行时基本状态。
 
-返回内容包括：
+返回内容通常包括：
 
 - 当前运行模式
-- LLM 回退顺序
+- 当前后端模式
+- 云端回退顺序
 - 模块状态
-- 基本服务信息
 
 ### `GET /health/ready`
 
-用于生产环境就绪探针。
+用于检查系统是否完全就绪。
 
-只有在关键模块都准备完成后才会返回 `200`，包括：
+- 当关键模块都准备好时返回 `200`
+- 如果系统还在预热，可能返回 `503`
 
-- RAG
-- ESG scorer
-- report scheduler
+注意：
 
-如果还没准备好，会返回 `503`。
+在快速 demo 模式下，`/health` 往往比 `/health/ready` 更有参考价值，因为这个模式本来就不会等完整 RAG 全量准备完。
 
-## 11. 冷启动与预热说明
+## 13. 主要接口
 
-这个项目在冷启动时确实存在预热阶段。
+项目里最关键的接口包括：
 
-主要耗时来自：
+- `POST /agent/analyze`
+- `POST /agent/esg-score`
+- `GET /dashboard/overview`
+- `POST /admin/reports/generate`
+- `POST /admin/data-sources/sync`
+- `GET /health`
+- `GET /health/ready`
 
-- 从 Qdrant 恢复索引
-- 恢复本地 docstore 元数据
-- 首次加载本地 embedding 模型
-- 启动报表调度器
+完整接口说明可参考：
 
-上线建议：
+- [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md)
 
-- 先启动服务
-- 等 `/health/ready` 返回 `200`
-- 再通过 Nginx / 域名 / 反向代理接入流量
+## 14. 关键脚本
 
-如果跳过这一步，首个真实请求可能要等待数分钟。
+### 安装与启动
 
-## 12. 常用命令
+- `start.cmd`
+- `scripts/bootstrap_local_windows.bat`
+- `scripts/run_demo_fast_windows.bat`
+- `scripts/run_local_first_windows.bat`
+- `scripts/run_local_hybrid_windows.bat`
+- `scripts/start_local_qdrant_windows.bat`
 
-### 全量测试
+### 诊断与校验
+
+- `scripts/local_api_smoke.py`
+- `scripts/runtime_doctor.py`
+- `scripts/staging_check.py`
+- `scripts/rag_quality_check.py`
+
+### 维护与文档
+
+- `scripts/rebuild_rag_index.py`
+- `scripts/generate_customer_delivery_doc.py`
+- `scripts/build_static_frontend.mjs`
+
+## 15. 常用命令
+
+### 运行测试
 
 ```bash
 python -m pytest -q
@@ -659,113 +817,70 @@ python scripts/runtime_doctor.py
 python scripts/local_api_smoke.py --app-mode local --llm-backend-mode auto
 ```
 
-### Staging 预检
+### 构建静态前端
 
 ```bash
-python scripts/staging_check.py preflight
+npm run build:static
 ```
 
-### 生成客户交付 Word
+## 16. 常见问题
 
-```bash
-python scripts/generate_customer_delivery_doc.py
-```
+### `start.cmd` 打开浏览器后显示连接被拒绝
 
-输出位置：
+这通常说明浏览器打开得比后端真正完成启动更早。
 
-- `dist/ESG_Agentic_RAG_Copilot_客户交付说明_2026-04-07.docx`
+现在的 `start.cmd` 已经会先轮询 `/health` 再打开 `/app`，但如果你仍然遇到：
 
-## 13. 关键脚本
+1. 再等几秒
+2. 手动刷新页面
+3. 检查 `http://127.0.0.1:<端口>/health`
+4. 必要时重新执行 `start.cmd`
 
-### 交付与运行
+### 页面能打开，但 `/health/ready` 一直是 `503`
 
-- `scripts/bootstrap_local_windows.bat`
-- `scripts/start_local_qdrant_windows.bat`
-- `scripts/run_local_first_windows.bat`
-- `scripts/run_local_hybrid_windows.bat`
-- `scripts/local_api_smoke.py`
-- `scripts/runtime_doctor.py`
-- `scripts/staging_check.py`
+这在完整本地模式下可能是正常现象，说明系统还在预热，例如：
 
-### RAG 与维护
+- Qdrant 正在恢复
+- RAG 索引正在加载
+- 调度器正在启动
 
-- `scripts/rebuild_rag_index.py`
-- `scripts/rag_quality_check.py`
+### 本地模型一直没有跑
 
-### 交付文档辅助
+如果机器没有 CUDA，这是正常行为。
 
-- `scripts/generate_customer_delivery_doc.py`
+系统会自动回退到云端模型。
 
-## 14. 主要接口
+### 英文模式下还残留中文
 
-产品最常用的接口包括：
+先按 `Ctrl + F5` 强制刷新页面，确保浏览器拿到最新的前端资源。
 
-- `POST /agent/analyze`
-- `POST /agent/esg-score`
-- `GET /dashboard/overview`
-- `POST /admin/reports/generate`
-- `POST /admin/data-sources/sync`
-- `GET /health`
-- `GET /health/ready`
+因为前端资源有版本号，如果浏览器标签页缓存了旧脚本，看起来就像“代码改了但页面没变”。
 
-完整接口说明见：
+## 17. Demo 建议
 
-- [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md)
+如果你是为了录演示视频，推荐直接用：
 
-## 15. 交付与部署文档
+- `start.cmd`
 
-交付、部署和验收时建议优先查看：
+推荐演示顺序：
 
-- [docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md](docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md)
+1. 打开 `Overview`
+2. 展示 `ENG / 中文` 切换
+3. 进入 `Chat`
+4. 输入一个 ESG 问题
+5. 进入 `Scoring`
+6. 生成一个公司评分
+7. 打开 `Report Center`
+
+## 18. 相关文档
+
+- [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)
 - [docs/STAGING_RELEASE_RUNBOOK.md](docs/STAGING_RELEASE_RUNBOOK.md)
 - [docs/LOCAL_HYBRID_RUNBOOK.md](docs/LOCAL_HYBRID_RUNBOOK.md)
 - [docs/LOCAL_HYBRID_RUNBOOK_ZH.md](docs/LOCAL_HYBRID_RUNBOOK_ZH.md)
 - [docs/REMOTE_GPU_RUNBOOK.md](docs/REMOTE_GPU_RUNBOOK.md)
-- [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)
+- [docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md](docs/PRODUCT_DELIVERY_CHECKLIST_ZH.md)
 
-## 16. 常见问题
-
-### Docker Desktop 里看到 Qdrant 在跑，但项目还是连不上
-
-请确认你使用的是带宿主机端口映射的 compose 管理版 Qdrant：
-
-- 预期端口：`6333`
-- 预期容器：`esg-qdrant`
-
-`scripts/start_local_qdrant_windows.bat` 会自动停掉一个名为 `qdrant` 的独立旧容器，以释放 `6333` 端口。
-
-### `/health` 正常，但 `/health/ready` 还是 `503`
-
-这通常说明运行时还在预热。
-
-继续等待，并检查：
-
-- Qdrant 是否可连通
-- 本地 embedding 模型是否已热起来
-- docstore 是否恢复完成
-
-### 本地模型一直没有执行
-
-如果当前主机没有 CUDA，这属于预期行为。
-
-这时回答链路会回退到：
-
-- `DeepSeek -> OpenAI`
-
-### 第一个分析请求很慢
-
-通常意味着：
-
-- 服务在 ready 前就被打进了真实请求
-- 或 embedding 模型第一次被加载
-
-## 17. 安全说明
-
-- 不要把真实 `.env` 提交到仓库
-- 不要把服务端 Supabase 密钥暴露到前端
-- 生产环境要收紧 `CORS_ORIGINS`
-- API 密钥建议定期轮换
-
-## 18. License
+## 19. License
 
 MIT

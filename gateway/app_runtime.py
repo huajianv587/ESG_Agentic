@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException
 
+from gateway.config import settings
 from gateway.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -192,7 +193,9 @@ class RuntimeContext:
 
         if getattr(app.state, "query_engine", None) is None:
             app.state.query_engine = None
-            if self.get_query_engine is not None:
+            if settings.DEMO_FAST_MODE:
+                logger.info("[Startup] DEMO_FAST_MODE enabled, skipping background RAG init.")
+            elif self.get_query_engine is not None:
                 async def _init_rag():
                     loop = asyncio.get_running_loop()
                     try:

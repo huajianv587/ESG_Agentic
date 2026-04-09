@@ -6,6 +6,7 @@
 import { router } from './router.js';
 import { store } from './store.js';
 import { api } from './api.js';
+import { applyLocale, getLocale, initI18n, setLocale } from './i18n.js';
 import { renderNav, initNavListener, updateHealthStatus } from './components/nav.js';
 import { toastError, toastInfo, initErrorListener } from './components/toast.js';
 import { newSessionId } from './utils.js';
@@ -34,6 +35,7 @@ if (window.Chart) {
 // ============================================
 
 async function init() {
+  initI18n();
   console.log('🚀 ESG Copilot 启动...');
 
   // 初始化导航
@@ -148,6 +150,9 @@ function setupGlobalListeners() {
 
   window.addEventListener('route-change', () => {
     enhanceInteractiveSurfaces();
+    window.requestAnimationFrame(() => {
+      applyLocale(document.body);
+    });
   });
 }
 
@@ -274,6 +279,8 @@ window.__ESG_DEBUG__ = {
   store,
   api,
   router,
+  getLocale,
+  setLocale,
   // 快速导航函数
   nav: (path) => {
     window.location.hash = `#${path}`;
